@@ -36,6 +36,16 @@
 
 ;; Group definition:
 
+(defcustom languagetool-server-lines-before 2
+  "Number of lines before point to include in the region."
+  :group 'languagetool-server
+  :type 'integer)
+
+(defcustom languagetool-server-lines-after 2
+  "Number of lines after point to include in the region."
+  :group 'languagetool-server
+  :type 'integer)
+
 (defgroup languagetool-server nil
   "Real time LanguageTool Server."
   :tag "Server"
@@ -255,12 +265,14 @@ of seconds specified in `languagetool-server-max-timeout'."
        (error "LanguageTool Server cannot communicate with server")))
     (languagetool-server-should-check)))
 
-(defun languagetool-server-parse-request ()
+(defun languagetool-server-parse-request (&optional start end)
   "Return a assoc-list with LanguageTool Server request arguments parsed.
 
 Return the arguments as an assoc list of string which will be
 used in the POST request made to the LanguageTool server."
-  (let (arguments)
+  (let ((region-start (or start (point-min)))
+        (region-end (or end (point-max)))
+        arguments)
 
     ;; Appends the correction language information
     (push (list "language" languagetool-correction-language) arguments)
@@ -288,7 +300,27 @@ used in the POST request made to the LanguageTool server."
         (push (list "disabledRules" rules) arguments)))
 
     ;; Add the buffer contents
-    (push (list "text" (buffer-substring-no-properties (point-min) (point-max))) arguments)))
+    (push (list "text" (buffer-substring-no-properties region-start region-end)) arguments)
+		)
+	)
+
+(defun languagetool-server-region-around-point ()
+  "Return cons cell (start . end) for region around point, without moving point."
+  (let ((start (line-beginning-position (- languagetool-server-lines-before 0)))
+        (end (line-end-position languagetool-server-lines-after)))
+    (cons start end)
+		)
+	)
+
+(defun languagetool-server-region-around-point ()
+  "Return cons cell (start . end) for region around point, using line offsets."
+  (let ((start (save-excursion
+                 (forward-line (- languagetool-server-lines-before))
+                 (line-beginning-position)))
+        (end (save-excursion
+               (forward-line languagetool-server-lines-after)
+               (line-end-position))))
+    (cons start end)))
 
 (defun languagetool-server-should-check (&rest _args)
   "Tell the package to send a request if there are no more edit commands in a time.
@@ -299,43 +331,45 @@ end and length into the ARGS argument."
     (cancel-timer languagetool-server-check-timer))
 
   (unless languagetool-server-correcting-p
-    (setq languagetool-server-check-timer (run-with-timer languagetool-server-check-delay nil #'languagetool-server-send-request))))
+    (setq languagetool-server-check-timer (run-with-timer languagetool-server-check-delay nil #'languagetool-server-check-region-around-point))))
 
-(defun languagetool-server-send-request ()
+(defun languagetool-server-send-request (&optional start end)
   "Send a request to the server and parse the output given."
-  (let ((url-request-method "POST")
-        (url-request-data (url-build-query-string (languagetool-server-parse-request))))
+  (let* ((region-start (or start (point-min)))
+        (region-end (or end (point-max)))
+				(url-request-method "POST")
+        (url-request-data (url-build-query-string (languagetool-server-parse-request region-start region-end))))
     (url-retrieve
      (url-encode-url(format "%s:%d/v2/check" languagetool-server-url languagetool-server-port))
      #'languagetool-server-highlight-matches
-     (list (current-buffer))
+     (list (current-buffer) region-start)
      t)))
 
-(defun languagetool-server-highlight-matches (_status checking-buffer)
-  "Highlight LanguageTool Server issues in CHECKING-BUFFER.
-
-STATUS is a plist thrown by Emacs url. Throws an error if the response is null."
+(defun languagetool-server-highlight-matches (_status checking-buffer region-start)
+  "Highlight LanguageTool Server issues in CHECKING-BUFFER for region starting at REGION-START."
+	(message "start highlighting")
   (when (/= (symbol-value 'url-http-response-status) 200)
     (error "LanguageTool Server closed"))
   (unless languagetool-server-correcting-p
     (set-buffer-multibyte t)
     (goto-char (point-max))
     (backward-sexp)
-    (let ((json-parsed (json-read)))
-      (with-current-buffer checking-buffer
-        (save-excursion
-          (languagetool-core-clear-buffer)
-          (when languagetool-server-mode
-            (let ((corrections (alist-get 'matches json-parsed)))
-              (dotimes (index (length corrections))
-                (let* ((correction (aref corrections index))
-                       (offset (alist-get 'offset correction))
-                       (size (alist-get 'length correction))
-                       (start (+ (point-min) offset))
-                       (end (+ (point-min) offset size))
-                       (word (buffer-substring-no-properties start end)))
-                  (unless (languagetool-core-correct-p word)
-                    (languagetool-issue-create-overlay start end correction)))))))))))
+		(let ((json-parsed (json-read)))
+			(with-current-buffer checking-buffer
+				(save-excursion
+					(languagetool-core-clear-buffer)
+					(when languagetool-server-mode
+						(let ((corrections (alist-get 'matches json-parsed)))
+							(dotimes (index (length corrections))
+								(let* ((correction (aref corrections index))
+											 (offset (alist-get 'offset correction))
+											 (size (alist-get 'length correction))
+											 (start (+ region-start offset))
+											 (end (+ region-start offset size))
+											 (word (buffer-substring-no-properties start end)))
+									(unless (languagetool-core-correct-p word)
+										(languagetool-issue-create-overlay start end correction))))))))))
+	)
 
 (provide 'languagetool-server)
 
