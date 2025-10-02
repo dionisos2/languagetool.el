@@ -191,7 +191,7 @@ A example hint function:
           (const nil)
           function))
 
-(defcustom languagetool-hint-idle-delay 0.5
+(defcustom languagetool-hint-idle-delay 2
   "Number of seconds idle before showing hint."
   :group 'languagetool
   :type 'number)

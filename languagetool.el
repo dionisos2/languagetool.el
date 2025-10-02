@@ -107,18 +107,31 @@ checked."
     (setq languagetool-server-correcting-p nil)))
 
 ;;;###autoload
-(defun languagetool-correct-buffer ()
-  "Pops up transient buffer to do correction in the whole buffer."
-  (interactive)
+(defun languagetool-correct-buffer (&optional reverse)
+  "Correct all LanguageTool errors in the buffer.
+
+If REVERSE is non-nil (default), corrections start from the last error and move backward.
+If REVERSE is nil, corrections start from the first error and move forward.
+
+This function pops up a transient buffer for each correction.
+
+If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p' during correction."
+  (interactive "P")
   (when languagetool-server-mode
     (setq languagetool-server-correcting-p t))
   (condition-case err
       (save-excursion
-        (dolist (ov (reverse (overlays-in (point-min) (point-max))))
-          (when (and (overlay-get ov 'languagetool-message)
-                     (overlay-start ov))
-            (goto-char (overlay-start ov))
-            (languagetool-correction-at-point))))
+        (let* ((overlays (overlays-in (point-min) (point-max)))
+               (sorted (sort overlays
+                             (lambda (a b)
+                               (if reverse
+                                   (< (overlay-start a) (overlay-start b))
+                                 (> (overlay-start a) (overlay-start b)))))))
+          (dolist (ov sorted)
+            (when (and (overlay-get ov 'languagetool-message)
+                       (overlay-start ov))
+              (goto-char (overlay-start ov))
+              (languagetool-correction-at-point)))))
     ((quit error)
      (when languagetool-server-mode
        (setq languagetool-server-correcting-p nil))
@@ -126,6 +139,10 @@ checked."
   (when languagetool-server-mode
     (setq languagetool-server-correcting-p nil)))
 
+(defun languagetool-correct-buffer-forward ()
+	(interactive)
+	(languagetool-correct-buffer t)
+	)
 (provide 'languagetool)
 
 ;;; languagetool.el ends here
