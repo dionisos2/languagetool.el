@@ -327,6 +327,7 @@ used in the POST request made to the LanguageTool server."
 
 (defun languagetool-server-check-region-around-point ()
 	"Check the region around point using customizable line settings."
+	(interactive)
 	(when languagetool-server-mode
 		(let* ((region (languagetool-server-region-around-point languagetool-server-lines-before languagetool-server-lines-after))
 					 (start (car region))

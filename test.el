@@ -23,6 +23,7 @@
 	(languagetool-server-url "http://localhost")
 	(languagetool-server-port 8081)
 	(languagetool-hint-idle-delay 2)
+	(languagetool-correction-keys (string-to-vector "auienrstdoygov123456789"))
 )
 
 (ert-deftest languagetool-test-region-around-point-middle ()

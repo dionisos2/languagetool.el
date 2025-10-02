@@ -33,14 +33,13 @@
 
 ;; Variable definitions:
 
-(defvar languagetool-correction-keys
-  [?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?0
-      ;; suggestions may over 10.
-      ;; define rest of alphabet just in case.
-      ?a ?b ?c ?d ?e ?f ?g ?h ?i ?j
-      ?k ?l ?m ?n ?o ?p ?q ?r ?s ?t
-      ?u ?v ?w ?x ?y ?z]
-  "LanguageTool suggestion keys.")
+(defcustom languagetool-correction-keys
+   (string-to-vector "1234567890abcdefghijklmnopqrstuvwxyz")
+  "Vector of keys used for LanguageTool suggestion selection.
+
+Each element should be a character (integer) used to select suggestions."
+  :type '(vector character)
+  :group 'languagetool)
 
 ;; Function definitions:
 
