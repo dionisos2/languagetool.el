@@ -206,6 +206,19 @@ A example hint function:
         (when (overlay-get ov 'languagetool-message)
           (delete-overlay ov))))))
 
+(defun languagetool-core-clear-region (start end)
+  "Delete LanguageTool overlays only in the specified region.
+
+START and END define the region boundaries. This function is used
+for selective overlay clearing in visible text mode to preserve
+overlays outside the region being updated."
+  (save-restriction
+    (widen)
+    (save-excursion
+      (dolist (ov (overlays-in start end))
+        (when (overlay-get ov 'languagetool-message)
+          (delete-overlay ov))))))
+
 (defun languagetool-core-hint-default-function ()
   "Default hint display function."
   (dolist (ov (overlays-at (point)))

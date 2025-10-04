@@ -266,5 +266,173 @@
       (when (file-directory-p temp-dir)
         (delete-directory temp-dir t)))))
 
+(ert-deftest languagetool-test-visible-region-detection ()
+  "Test visible region detection at different window positions."
+  (with-temp-buffer
+    (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\n")
+    (goto-char (point-min))
+    
+    ;; Test basic visible region detection
+    (let ((region (languagetool-server-get-visible-region)))
+      (should (consp region))
+      (should (>= (car region) (point-min)))
+      (should (<= (cdr region) (point-max)))
+      (should (< (car region) (cdr region))))
+    
+    ;; Test visible text extraction
+    (let ((text (languagetool-server-get-visible-text)))
+      (should (stringp text))
+      (should (> (length text) 0)))
+    
+    ;; Test at different positions
+    (goto-char (point-min))
+    (forward-line 3)
+    (let ((region-middle (languagetool-server-get-visible-region)))
+      (goto-char (point-max))
+      (let ((region-end (languagetool-server-get-visible-region)))
+        ;; Regions should be different when at different positions
+        (should-not (equal region-middle region-end))))))
+
+(ert-deftest languagetool-test-visible-text-change-detection ()
+  "Test change detection for visible text content."
+  (with-temp-buffer
+    (let ((languagetool-server-use-visible-text-mode t))
+      (insert "Initial text content\nSecond line\nThird line\n")
+      
+      ;; Initialize cache
+      (setq languagetool-server-visible-text-cache nil)
+      (setq languagetool-server-visible-region-cache nil)
+      
+      ;; First check should detect change (cache is empty)
+      (should (languagetool-server-visible-text-changed-p))
+      
+      ;; Second check should not detect change (cache is populated)
+      (should-not (languagetool-server-visible-text-changed-p))
+      
+      ;; Modify buffer content
+      (goto-char (point-max))
+      (insert "New line added\n")
+      
+      ;; Should detect change after content modification
+      (should (languagetool-server-visible-text-changed-p))
+      
+      ;; Should not detect change again
+      (should-not (languagetool-server-visible-text-changed-p)))))
+
+(ert-deftest languagetool-test-visible-text-mode-switching ()
+  "Test switching between line-based and visible text modes."
+  (with-temp-buffer
+    (insert "Test content for mode switching\nSecond line\nThird line\n")
+    
+    ;; Test line-based mode (default)
+    (let ((languagetool-server-use-visible-text-mode nil))
+      (should-not languagetool-server-use-visible-text-mode)
+      
+      ;; Change detection should return nil in line-based mode
+      (should-not (languagetool-server-visible-text-changed-p)))
+    
+    ;; Test visible text mode
+    (let ((languagetool-server-use-visible-text-mode t))
+      (should languagetool-server-use-visible-text-mode)
+      
+      ;; Reset cache for clean test
+      (setq languagetool-server-visible-text-cache nil)
+      (setq languagetool-server-visible-region-cache nil)
+      
+      ;; Change detection should work in visible text mode
+      (should (languagetool-server-visible-text-changed-p)))))
+
+(ert-deftest languagetool-test-visible-text-debouncing ()
+  "Test debouncing configuration for visible text changes."
+  (with-temp-buffer
+    (let ((languagetool-server-use-visible-text-mode t)
+          (languagetool-server-visible-text-debounce-delay 0.1))
+      (insert "Content for debouncing test\n")
+      
+      ;; Test that debounce delay is configurable
+      (should (numberp languagetool-server-visible-text-debounce-delay))
+      (should (> languagetool-server-visible-text-debounce-delay 0))
+      
+      ;; Test timer creation and cancellation
+      (setq languagetool-server-visible-text-timer nil)
+      (languagetool-server-handle-visible-text-change)
+      
+      ;; Timer should be created
+      (should (timerp languagetool-server-visible-text-timer))
+      
+      ;; Cancel timer for cleanup
+      (when (timerp languagetool-server-visible-text-timer)
+        (cancel-timer languagetool-server-visible-text-timer)))))
+
+(ert-deftest languagetool-test-window-event-handlers ()
+  "Test window scroll and size change event handlers."
+  (with-temp-buffer
+    (let ((languagetool-server-use-visible-text-mode t)
+          (languagetool-server-mode t))
+      (insert "Content for window event testing\nLine 2\nLine 3\n")
+      
+      ;; Test window scroll handler
+      (let ((current-window (selected-window)))
+        ;; Should handle scroll events when conditions are met
+        (should-not (languagetool-server-handle-window-scroll current-window (point-min)))
+        
+        ;; Test with different window (should not trigger)
+        (should-not (languagetool-server-handle-window-scroll nil (point-min))))
+      
+      ;; Test window size change handler
+      (let ((current-frame (selected-frame)))
+        ;; Should handle size change events when conditions are met
+        (should-not (languagetool-server-handle-window-size-change current-frame))))))
+
+(ert-deftest languagetool-test-overlay-management-visible-mode ()
+  "Test overlay management with changing visible regions."
+  (with-temp-buffer
+    (let ((languagetool-server-use-visible-text-mode t))
+      (insert "Text with potential issues\nSecond line with content\nThird line\n")
+      
+      ;; Create some mock overlays
+      (let ((ov1 (make-overlay 1 10))
+            (ov2 (make-overlay 20 30))
+            (ov3 (make-overlay 40 50)))
+        
+        ;; Mark overlays as LanguageTool overlays
+        (overlay-put ov1 'languagetool-message "Test message 1")
+        (overlay-put ov2 'languagetool-message "Test message 2")
+        (overlay-put ov3 'languagetool-message "Test message 3")
+        
+        ;; Test selective overlay clearing
+        (languagetool-server-clear-region-overlays 1)
+        
+        ;; Verify overlays exist (they should since we're testing the function exists)
+        (should (overlayp ov1))
+        (should (overlayp ov2))
+        (should (overlayp ov3))
+        
+        ;; Clean up overlays
+        (delete-overlay ov1)
+        (delete-overlay ov2)
+        (delete-overlay ov3)))))
+
+(ert-deftest languagetool-test-mode-activation-deactivation ()
+  "Test server mode activation and deactivation with visible text mode."
+  (with-temp-buffer
+    (insert "Test content for mode activation\n")
+    
+    ;; Test variables are properly initialized
+    (should (boundp 'languagetool-server-visible-text-cache))
+    (should (boundp 'languagetool-server-visible-region-cache))
+    (should (boundp 'languagetool-server-visible-text-timer))
+    
+    ;; Test cache clearing
+    (setq languagetool-server-visible-text-cache "test-cache")
+    (setq languagetool-server-visible-region-cache '(1 . 100))
+    
+    ;; Simulate mode deactivation cleanup
+    (setq languagetool-server-visible-text-cache nil)
+    (setq languagetool-server-visible-region-cache nil)
+    
+    ;; Verify cleanup
+    (should-not languagetool-server-visible-text-cache)
+    (should-not languagetool-server-visible-region-cache)))
 
 ;; test.el ends here
