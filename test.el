@@ -135,7 +135,6 @@
 ;; (setq languagetool-core-correct-predicates
 ;;       (remove #'my-ignore-long-words-p languagetool-core-correct-predicates))
 
-
 (ert-deftest languagetool-test-dict-file-path ()
   "Test that languagetool-core--dict-file returns the correct path."
   (let ((languagetool-correction-language "fr")
@@ -176,8 +175,6 @@
     ;; Should not ignore "chat"
     (should-not (languagetool-core-correct-p "chat"))))
 
-
-
 (ert-deftest languagetool-test-rules-json-load-save ()
   "Test loading and saving the LanguageTool rules JSON."
   (let* ((temp-dir (make-temp-file "lt-rules-dir" t))
@@ -197,8 +194,6 @@
       (when (file-directory-p temp-dir)
         (delete-directory temp-dir t)))))
 
-
-
 (ert-deftest languagetool-test-get-rules-for-file ()
   "Test getting disabled rules for a specific file."
   (let* ((temp-dir (make-temp-file "lt-rules-dir" t))
@@ -212,13 +207,11 @@
                          '("RULE_X" "RULE_Y")))
           (should (equal (languagetool-get-rules-for-file "/tmp/unknown.txt")
                          '())))
-      ;; Cleanup
-      (when (file-exists-p languagetool-rules-json-path)
-        (delete-file languagetool-rules-json-path))
-      (when (file-directory-p temp-dir)
-        (delete-directory temp-dir t)))))
-
-
+    ;; Cleanup
+    (when (file-exists-p languagetool-rules-json-path)
+      (delete-file languagetool-rules-json-path))
+    (when (file-directory-p temp-dir)
+      (delete-directory temp-dir t)))))
 
 (ert-deftest languagetool-test-update-rule-for-file ()
   "Test adding and removing rules for a file."
@@ -240,13 +233,11 @@
           ;; Remove a non-existing rule (should not error)
           (languagetool-update-rule-for-file file "RULE_UNKNOWN" t)
           (should-not (member "RULE_UNKNOWN" (languagetool-get-rules-for-file file))))
-      ;; Cleanup
-      (when (file-exists-p languagetool-rules-json-path)
-        (delete-file languagetool-rules-json-path))
-      (when (file-directory-p temp-dir)
-        (delete-directory temp-dir t)))))
-
-
+    ;; Cleanup
+    (when (file-exists-p languagetool-rules-json-path)
+      (delete-file languagetool-rules-json-path))
+    (when (file-directory-p temp-dir)
+      (delete-directory temp-dir t)))))
 
 (ert-deftest languagetool-test-update-and-get-rules-for-current-buffer ()
   "Test updating and getting rules for the current buffer's file."
@@ -278,12 +269,12 @@
       (should (>= (car region) (point-min)))
       (should (<= (cdr region) (point-max)))
       (should (< (car region) (cdr region))))
-    
+
     ;; Test visible text extraction
     (let ((text (languagetool-server-get-visible-text)))
       (should (stringp text))
       (should (> (length text) 0)))
-    
+
     ;; Test at different positions
     (goto-char (point-min))
     (forward-line 3)
@@ -330,7 +321,7 @@
       
       ;; Change detection should return nil in line-based mode
       (should-not (languagetool-server-visible-text-changed-p)))
-    
+
     ;; Test visible text mode
     (let ((languagetool-server-use-visible-text-mode t))
       (should languagetool-server-use-visible-text-mode)
