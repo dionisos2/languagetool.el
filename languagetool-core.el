@@ -172,7 +172,7 @@ The function must search for overlays at point. You must pass the
 function symbol.
 
 A example hint function:
-\(defun hint-function ()
+(defun hint-function ()
   \"Hint display function.\"
   (dolist (ov (overlays-at (point)))
     (when (overlay-get ov 'languagetool-message)
@@ -254,7 +254,7 @@ Each function should accept a single argument WORD and return t if the word shou
 (defun languagetool-core--dict-file ()
   "Return the personal dictionary file name according to `languagetool-correction-language`."
   (expand-file-name
-	 (format "languagetool-dict-%s.txt" languagetool-correction-language)
+   (format "languagetool-dict-%s.txt" languagetool-correction-language)
    languagetool-dict-directory)
 	)
 
@@ -299,23 +299,61 @@ This means the word should be ignored and not corrected."
 
 (defun languagetool-load-rules-json ()
   "Load the LanguageTool disabled rules dictionary from the JSON file as a hash-table."
-  (if (file-exists-p languagetool-rules-json-path)
-      (let ((alist (json-read-file languagetool-rules-json-path)))
-        (let ((ht (make-hash-table :test 'equal)))
-          (dolist (pair alist)
-            (puthash (car pair) (append (cdr pair) nil) ht)) ; ensure value is a list
-          ht))
-    (make-hash-table :test 'equal)))
-
+  (let ((ht (make-hash-table :test 'equal)))
+    (when (and (file-exists-p languagetool-rules-json-path)
+               (> (nth 7 (file-attributes languagetool-rules-json-path)) 0))
+      (condition-case err
+          (let ((json-data (json-read-file languagetool-rules-json-path)))
+            (message "DEBUG: JSON data loaded: %S" json-data)
+            (message "DEBUG: JSON data type: %S" (type-of json-data))
+            (when json-data
+              ;; Handle JSON as alist of (key . value) pairs
+              (if (and (listp json-data) (consp (car json-data)))
+                  (dolist (pair json-data)
+                    (when (consp pair)
+                      (let ((key (car pair))
+                            (value (cdr pair)))
+                        (message "DEBUG: Processing pair - key: %S, value: %S, value-type: %S"
+                                 key value (type-of value))
+                        ;; Convert symbol key to string if needed
+                        (when (symbolp key)
+                          (setq key (symbol-name key)))
+                        (when (stringp key)
+                          ;; Convert vector to list if needed
+                          (when (vectorp value)
+                            (setq value (append value nil)))
+                          (when (listp value)
+                            (message "DEBUG: Adding to hash table - key: %S, value: %S"
+                                     key value)
+                            (puthash key value ht))))))
+                (message "DEBUG: Unexpected JSON format - not an alist: %S" json-data)))
+            )
+        (error
+         (message "ERROR: Could not parse LanguageTool rules JSON file: %s"
+                  (error-message-string err))))
+      (message "DEBUG: Final hash table contents:")
+      (maphash (lambda (k v) (message "DEBUG:   %S -> %S" k v)) ht))
+    ht))
 
 (defun languagetool-save-rules-json (rules)
   "Save the LanguageTool disabled rules dictionary to the JSON file."
+  (unless (file-directory-p languagetool-dict-directory)
+    (make-directory languagetool-dict-directory t))
   (let (alist)
+    (message "DEBUG: Saving rules hash table:")
+    (maphash (lambda (k v)
+               (message "DEBUG:   %S -> %S" k v))
+             rules)
     (maphash (lambda (k v)
                (push (cons k v) alist))
              rules)
-    (with-temp-file languagetool-rules-json-path
-      (insert (json-encode (nreverse alist))))))
+    (setq alist (nreverse alist))
+    (message "DEBUG: Alist to be saved: %S" alist)
+    (let ((json-string (json-encode alist)))
+      (message "DEBUG: JSON string to be written: %S" json-string)
+      (with-temp-file languagetool-rules-json-path
+        (insert json-string))
+      (message "DEBUG: JSON file written to: %S" languagetool-rules-json-path))))
 
 (defun languagetool-get-rules-for-file (file)
   "Return the list of disabled rule IDs for the given FILE."

@@ -179,53 +179,94 @@
     (should-not (languagetool-core-correct-p "chat"))))
 
 
+
 (ert-deftest languagetool-test-rules-json-load-save ()
   "Test loading and saving the LanguageTool rules JSON."
-  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json")))
-    (let ((rules (make-hash-table :test 'equal)))
-      (puthash "/tmp/test1.txt" '("RULE_A" "RULE_B") rules)
-      (puthash "/tmp/test2.txt" '("RULE_C") rules)
-      (languagetool-save-rules-json rules)
-      (let ((loaded (languagetool-load-rules-json)))
-        (should (equal (gethash "/tmp/test1.txt" loaded) '("RULE_A" "RULE_B")))
-        (should (equal (gethash "/tmp/test2.txt" loaded) '("RULE_C")))))))
+  (let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+         (languagetool-dict-directory temp-dir)
+         (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir)))
+    (unwind-protect
+        (let ((rules (make-hash-table :test 'equal)))
+          (puthash "/tmp/test1.txt" '("RULE_A" "RULE_B") rules)
+          (puthash "/tmp/test2.txt" '("RULE_C") rules)
+          (languagetool-save-rules-json rules)
+          (let ((loaded (languagetool-load-rules-json)))
+            (should (equal (gethash "/tmp/test1.txt" loaded) '("RULE_A" "RULE_B")))
+            (should (equal (gethash "/tmp/test2.txt" loaded) '("RULE_C")))))
+      ;; Cleanup
+      (when (file-exists-p languagetool-rules-json-path)
+        (delete-file languagetool-rules-json-path))
+      (when (file-directory-p temp-dir)
+        (delete-directory temp-dir t)))))
+    
+
 
 (ert-deftest languagetool-test-get-rules-for-file ()
   "Test getting disabled rules for a specific file."
-  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json")))
-    (let ((rules (make-hash-table :test 'equal)))
-      (puthash "/tmp/test3.txt" '("RULE_X" "RULE_Y") rules)
-      (languagetool-save-rules-json rules)
-      (should (equal (languagetool-get-rules-for-file "/tmp/test3.txt")
-                     '("RULE_X" "RULE_Y")))
-      (should (equal (languagetool-get-rules-for-file "/tmp/unknown.txt")
-                     '())))))
+  (let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+         (languagetool-dict-directory temp-dir)
+         (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir)))
+    (unwind-protect
+        (let ((rules (make-hash-table :test 'equal)))
+          (puthash "/tmp/test3.txt" '("RULE_X" "RULE_Y") rules)
+          (languagetool-save-rules-json rules)
+          (should (equal (languagetool-get-rules-for-file "/tmp/test3.txt")
+                         '("RULE_X" "RULE_Y")))
+          (should (equal (languagetool-get-rules-for-file "/tmp/unknown.txt")
+                         '())))
+      ;; Cleanup
+      (when (file-exists-p languagetool-rules-json-path)
+        (delete-file languagetool-rules-json-path))
+      (when (file-directory-p temp-dir)
+        (delete-directory temp-dir t)))))
+    
+
 
 (ert-deftest languagetool-test-update-rule-for-file ()
   "Test adding and removing rules for a file."
-  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json"))
-        (file "/tmp/test4.txt"))
-    ;; Add a rule
-    (languagetool-update-rule-for-file file "RULE_ADD")
-    (should (member "RULE_ADD" (languagetool-get-rules-for-file file)))
-    ;; Add another rule
-    (languagetool-update-rule-for-file file "RULE_OTHER")
-    (should (member "RULE_OTHER" (languagetool-get-rules-for-file file)))
-    ;; Remove a rule
-    (languagetool-update-rule-for-file file "RULE_ADD" t)
-    (should-not (member "RULE_ADD" (languagetool-get-rules-for-file file)))
-    ;; Remove a non-existing rule (should not error)
-    (languagetool-update-rule-for-file file "RULE_UNKNOWN" t)
-    (should-not (member "RULE_UNKNOWN" (languagetool-get-rules-for-file file)))))
+  (let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+         (languagetool-dict-directory temp-dir)
+         (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir))
+         (file "/tmp/test4.txt"))
+    (unwind-protect
+        (progn
+          ;; Add a rule
+          (languagetool-update-rule-for-file file "RULE_ADD")
+          (should (member "RULE_ADD" (languagetool-get-rules-for-file file)))
+          ;; Add another rule
+          (languagetool-update-rule-for-file file "RULE_OTHER")
+          (should (member "RULE_OTHER" (languagetool-get-rules-for-file file)))
+          ;; Remove a rule
+          (languagetool-update-rule-for-file file "RULE_ADD" t)
+          (should-not (member "RULE_ADD" (languagetool-get-rules-for-file file)))
+          ;; Remove a non-existing rule (should not error)
+          (languagetool-update-rule-for-file file "RULE_UNKNOWN" t)
+          (should-not (member "RULE_UNKNOWN" (languagetool-get-rules-for-file file))))
+      ;; Cleanup
+      (when (file-exists-p languagetool-rules-json-path)
+        (delete-file languagetool-rules-json-path))
+      (when (file-directory-p temp-dir)
+        (delete-directory temp-dir t)))))  
+    
+
 
 (ert-deftest languagetool-test-update-and-get-rules-for-current-buffer ()
   "Test updating and getting rules for the current buffer's file."
-  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json")))
-    (with-temp-buffer
-      (let ((buffer-file-name "/tmp/test5.txt"))
-        (languagetool-update-rule-for-current-buffer "RULE_CUR")
-        (should (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))
-        (languagetool-update-rule-for-current-buffer "RULE_CUR" t)
-        (should-not (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))))))
+  (let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+         (languagetool-dict-directory temp-dir)
+         (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir)))
+    (unwind-protect
+        (with-temp-buffer
+          (let ((buffer-file-name "/tmp/test5.txt"))
+            (languagetool-update-rule-for-current-buffer "RULE_CUR")
+            (should (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))
+            (languagetool-update-rule-for-current-buffer "RULE_CUR" t)
+            (should-not (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))))
+      ;; Cleanup
+      (when (file-exists-p languagetool-rules-json-path)
+        (delete-file languagetool-rules-json-path))
+      (when (file-directory-p temp-dir)
+        (delete-directory temp-dir t)))))  
+    
 
 ;; test.el ends here
