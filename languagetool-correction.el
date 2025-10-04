@@ -48,10 +48,10 @@ Each element should be a character (integer) used to select suggestions."
 
 Get the information about corrections from OVERLAY."
   (let* ((msg nil)
-        (rule (alist-get 'id (overlay-get overlay 'languagetool-rule)))
-        (message (overlay-get overlay 'languagetool-message))
-        (replacements (languagetool-core-get-replacements overlay))
-        (num-choices (length replacements)))
+         (rule (alist-get 'id (overlay-get overlay 'languagetool-rule)))
+         (message (overlay-get overlay 'languagetool-message))
+         (replacements (languagetool-core-get-replacements overlay))
+         (num-choices (length replacements)))
     ;; Add LanguageTool rule to the message
     (setq msg (concat msg "[" rule "] "))
 
@@ -112,9 +112,9 @@ on OVERLAY."
   (cond
    ((char-equal ?\C-i pressed-key)
     (save-excursion
-      (push (alist-get 'id (overlay-get overlay 'languagetool-rule)) languagetool-local-disabled-rules)
-      (add-file-local-variable 'languagetool-local-disabled-rules languagetool-local-disabled-rules)
-      (delete-overlay overlay)))
+      (let ((rule-id (alist-get 'id (overlay-get overlay 'languagetool-rule))))
+        (languagetool-update-rule-for-current-buffer rule-id)
+        (delete-overlay overlay))))
    ((char-equal ?\C-a pressed-key)
     (progn
 			(let ((word (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay))))
