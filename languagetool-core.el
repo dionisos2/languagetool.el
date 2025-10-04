@@ -29,7 +29,7 @@
 
 ;; Variable definitions:
 
-(require 'ispell)
+(require 'json)
 (eval-when-compile
   (require 'subr-x))
 
@@ -237,19 +237,113 @@ A example hint function:
       (push (alist-get 'value (aref replacements index)) replace))
     (reverse replace)))
 
+(defcustom languagetool-dict-directory
+	(expand-file-name "~/.config/languagetool")
+  "Directory where personal LanguageTool dictionaries and conf are stored."
+  :type 'directory
+  :group 'languagetool)
+
+(defcustom languagetool-core-correct-predicates
+  '(languagetool-core--word-in-dict-file-p)
+  "List of predicate functions to determine if a word should be ignored.
+
+Each function should accept a single argument WORD and return t if the word should be ignored (not corrected)."
+  :type '(repeat function)
+  :group 'languagetool)
+
+(defun languagetool-core--dict-file ()
+  "Return the personal dictionary file name according to `languagetool-correction-language`."
+  (expand-file-name
+	 (format "languagetool-dict-%s.txt" languagetool-correction-language)
+   languagetool-dict-directory)
+	)
+
+(defvar languagetool-core--dict-word-list nil
+  "List of words loaded from the personal dictionary file.")
+
+(defun languagetool-core-load-dict-file ()
+  "Interactively reload the personal dictionary file into memory."
+  (interactive)
+  (let ((dict-file (languagetool-core--dict-file)))
+    (if (file-exists-p dict-file)
+        (setq languagetool-core--dict-word-list
+              (split-string
+               (with-temp-buffer
+                 (insert-file-contents dict-file)
+                 (buffer-string))
+               "\n" t))
+      (setq languagetool-core--dict-word-list nil)
+			)
+		)
+	)
+
+(defun languagetool-core--word-in-dict-file-p (word)
+  "Return t if WORD is present in the in-memory dictionary word list."
+  (and languagetool-core--dict-word-list
+       (member word languagetool-core--dict-word-list)))
+
 (defun languagetool-core-correct-p (word)
-  "Return non-nil if WORD is on the LocalWords comment in the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (let (found)
-      (while (and (search-forward ispell-words-keyword nil t)
-                  (not found))
-	(when (re-search-forward (rx
-                                  (zero-or-more space)
-                                  (group (literal word))
-                                  (zero-or-more space)) (line-end-position) t)
-          (setq found t)))
-      found)))
+  "Return t if any predicate in `languagetool-core-correct-predicates' returns t for WORD.
+
+This means the word should be ignored and not corrected."
+  (seq-some (lambda (pred)
+              (and (functionp pred)
+                   (funcall pred word)))
+            languagetool-core-correct-predicates)
+	)
+
+(defvar languagetool-rules-json-path
+  (expand-file-name "languagetool-rules.json" languagetool-dict-directory)
+  "Path to the global LanguageTool rules JSON file."
+	)
+
+(defun languagetool-load-rules-json ()
+  "Load the LanguageTool disabled rules dictionary from the JSON file as a hash-table."
+  (if (file-exists-p languagetool-rules-json-path)
+      (let ((alist (json-read-file languagetool-rules-json-path)))
+        (let ((ht (make-hash-table :test 'equal)))
+          (dolist (pair alist)
+            (puthash (car pair) (append (cdr pair) nil) ht)) ; ensure value is a list
+          ht))
+    (make-hash-table :test 'equal)))
+
+
+(defun languagetool-save-rules-json (rules)
+  "Save the LanguageTool disabled rules dictionary to the JSON file."
+  (let (alist)
+    (maphash (lambda (k v)
+               (push (cons k v) alist))
+             rules)
+    (with-temp-file languagetool-rules-json-path
+      (insert (json-encode (nreverse alist))))))
+
+(defun languagetool-get-rules-for-file (file)
+  "Return the list of disabled rule IDs for the given FILE."
+  (let ((rules (languagetool-load-rules-json)))
+    (gethash file rules '())))
+
+(defun languagetool-update-rule-for-file (file rule-id &optional remove)
+  "Add or remove a rule for FILE in the LanguageTool rules JSON.
+If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID."
+  (let* ((rules (languagetool-load-rules-json))
+         (file-rules (gethash file rules '())))
+    (if remove
+        (setq file-rules (remove rule-id file-rules))
+      (unless (member rule-id file-rules)
+        (push rule-id file-rules)))
+    (puthash file file-rules rules)
+    (languagetool-save-rules-json rules)))
+
+(defun languagetool-update-rule-for-current-buffer (rule-id &optional remove)
+  "Add or remove a rule for the current buffer's file.
+If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID."
+  (when buffer-file-name
+    (languagetool-update-rule-for-file buffer-file-name rule-id remove)))
+
+(defun languagetool-get-rules-for-current-buffer ()
+  "Return the list of disabled rule IDs for the current buffer's file."
+  (when buffer-file-name
+    (languagetool-get-rules-for-file buffer-file-name)))
 
 (provide 'languagetool-core)
 

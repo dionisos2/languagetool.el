@@ -88,6 +88,22 @@ Get the information about corrections from OVERLAY."
                       (propertize "C-g" 'face 'font-lock-keyword-face)
                       "]: Quit\n"))))
 
+(defun languagetool-correction-add-word(word)
+	;; Append word to dictionary file
+	(let ((dict-file (languagetool-core--dict-file)))
+		(with-temp-buffer
+			(when (file-exists-p dict-file)
+				(insert-file-contents dict-file))
+			(goto-char (point-max))
+			(unless (or (bobp) (looking-back "\n" 1))
+				(insert "\n"))
+			(insert word "\n")
+			(write-region (point-min) (point-max) dict-file))
+		;; Reload dictionary list
+		(languagetool-core-load-dict-file)
+		)
+	)
+
 (defun languagetool-correction-apply (pressed-key overlay)
   "Apply LanguageTool replacement suggestion in OVERLAY.
 
@@ -101,8 +117,10 @@ on OVERLAY."
       (delete-overlay overlay)))
    ((char-equal ?\C-a pressed-key)
     (progn
+			(let ((word (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay))))
+				(languagetool-correction-add-word word)
+			)
       (goto-char (overlay-end overlay))
-      (ispell-add-per-file-word-list (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay)))
       (delete-overlay overlay)))
    ((char-equal ?\C-s pressed-key)
     (goto-char (overlay-end overlay)))

@@ -7,31 +7,44 @@
 (require 'ert)
 
 (use-package languagetool
-	:ensure nil
+	:demand
 	:load-path "~/projets/programmation/emacs/languagetool.el"
-  :commands (languagetool-clear-suggestions
+  :commands (
+						 languagetool-clear-suggestions
              languagetool-correct-at-point
              languagetool-correct-buffer
 						 languagetool-correct-buffer-forward
              languagetool-set-language
              languagetool-server-mode
-             languagetool-server-start
-             languagetool-server-stop)
+						 )
+	:hook
+  (text-mode-hook . languagetool-server-mode)
+  (org-mode-hook . languagetool-server-mode)
+  (markdown-mode-hook . languagetool-server-mode)
+	:bind (
+				 ("C-c s" . languagetool-correct-at-point)
+				 ("C-c C-s" . languagetool-correct-buffer-forward)
+				 ("C-<f10>" . languagetool-server-mode)
+				 ("<f10>" . languagetool-server-check-region-around-point)
+				 )
   :custom
 	(languagetool-correction-language "fr")
-  (languagetool-java-arguments '("-Dfile.encoding=UTF-8"))
+  (languagetool-java-arguments '("-dfile.encoding=utf-8"))
 	(languagetool-server-url "http://localhost")
 	(languagetool-server-port 8081)
-	(languagetool-hint-idle-delay 2)
+	(languagetool-hint-idle-delay 0.5)
+	(languagetool-server-check-delay 1.5)
+	(languagetool-server-lines-before 10)
+	(languagetool-server-lines-after 10)
 	(languagetool-correction-keys (string-to-vector "auienrstdoygov123456789"))
-)
+	)
 
 (ert-deftest languagetool-test-region-around-point-middle ()
   "Test extraction arround the points in the middle of the buffer."
   (with-temp-buffer
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\n")
     (goto-char (point-min))
-    (forward-line 3) ; Cursor sur Line 4
+    (forward-line 3) ;; Cursor sur Line 4
     (let* ((region (languagetool-server-region-around-point 2 2))
            (text (buffer-substring-no-properties (car region) (cdr region))))
       (should (string= text "Line 2\nLine 3\nLine 4\nLine 5\nLine 6"))
@@ -43,7 +56,7 @@
   "Test extraction around the points at the beginning of the buffer."
   (with-temp-buffer
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n")
-    (goto-char (point-min)) ; Cursor sur Line 1
+    (goto-char (point-min)) ;; Cursor sur Line 1
     (let* ((region (languagetool-server-region-around-point 2 2))
            (text (buffer-substring-no-properties (car region) (cdr region))))
       (should (string= text "Line 1\nLine 2\nLine 3"))
@@ -56,7 +69,7 @@
   (with-temp-buffer
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n")
     (goto-char (point-max))
-    (forward-line -1) ; Curseur sur Line 5
+    (forward-line -1) ;; Cursor sur Line 5
     (let* ((region (languagetool-server-region-around-point 2 2))
            (text (buffer-substring-no-properties (car region) (cdr region))))
       (should (string= text "Line 3\nLine 4\nLine 5\n"))
@@ -87,13 +100,13 @@
 (defun languagetool-test-callback (_status orig-buffer region-start)
   "Callback de test pour url-retrieve. Affiche la réponse JSON brute."
   (goto-char (point-min))
-  (re-search-forward "\n\n" nil 'move) ; sauter les headers
+  (re-search-forward "\n\n" nil 'move) sauter les headers
   (let ((json (buffer-substring-no-properties (point) (point-max))))
     (message "Réponse JSON: %s" json)
     (message "region-start: %d" region-start)
-    ;; Optionnel : parser le JSON
-    ;; (let ((parsed (json-read-from-string json)))
-    ;;   (message "JSON parsé: %S" parsed))
+    Optionnel : parser le JSON
+    (let ((parsed (json-read-from-string json)))
+      (message "JSON parsé: %S" parsed))
     ))
 
 (defun languagetool-test-send-request ()
@@ -112,5 +125,107 @@
        (list (current-buffer) start)
        t))))
 
+;; Example predicate: ignore words longer than 20 characters
+(defun my-ignore-long-words-p (word)
+  "Ignore words longer than 20 characters."
+  (> (length word) 20))
 
-;;; test.el ends here
+;; Add the predicate
+(add-to-list 'languagetool-core-correct-predicates #'my-ignore-long-words-p)
+
+;; Remove the predicate
+;; (setq languagetool-core-correct-predicates
+;;       (remove #'my-ignore-long-words-p languagetool-core-correct-predicates))
+
+
+(ert-deftest languagetool-test-dict-file-path ()
+  "Test that languagetool-core--dict-file returns the correct path."
+  (let ((languagetool-correction-language "fr")
+        (languagetool-dict-directory "/tmp/languagetool-test-dir"))
+    (should (string= (languagetool-core--dict-file)
+                     "/tmp/languagetool-test-dir/languagetool-dict-fr.txt"))))
+
+(ert-deftest languagetool-test-word-in-dict-file-p ()
+  "Test that languagetool-core--word-in-dict-file-p finds a word in the dictionary file."
+  (let* ((languagetool-correction-language "fr")
+         (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+         (dict-file (languagetool-core--dict-file)))
+    (with-temp-file dict-file
+      (insert "bonjour\nsalut\n"))
+		(languagetool-core-load-dict-file)
+    (should (languagetool-core--word-in-dict-file-p "bonjour"))
+    (should-not (languagetool-core--word-in-dict-file-p "hello"))))
+
+(ert-deftest languagetool-test-core-correct-p-predicates ()
+  "Test languagetool-core-correct-p with multiple predicates."
+  (let ((languagetool-correction-language "fr")
+        (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+        (languagetool-core-correct-predicates nil))
+    ;; Add a word to the dictionary file
+    (with-temp-file (languagetool-core--dict-file)
+      (insert "bonjour\n"))
+		(languagetool-core-load-dict-file)
+    ;; Add the dictionary predicate
+    (add-to-list 'languagetool-core-correct-predicates #'languagetool-core--word-in-dict-file-p)
+    ;; Add a custom predicate: ignore words longer than 10 characters
+    (defun my-ignore-long-words-p (word)
+      (> (length word) 10))
+    (add-to-list 'languagetool-core-correct-predicates #'my-ignore-long-words-p)
+    ;; Should ignore "bonjour" (in dict)
+    (should (languagetool-core-correct-p "bonjour"))
+    ;; Should ignore "supercalifragilistic" (long word)
+    (should (languagetool-core-correct-p "supercalifragilistic"))
+    ;; Should not ignore "chat"
+    (should-not (languagetool-core-correct-p "chat"))))
+
+
+(ert-deftest languagetool-test-rules-json-load-save ()
+  "Test loading and saving the LanguageTool rules JSON."
+  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json")))
+    (let ((rules (make-hash-table :test 'equal)))
+      (puthash "/tmp/test1.txt" '("RULE_A" "RULE_B") rules)
+      (puthash "/tmp/test2.txt" '("RULE_C") rules)
+      (languagetool-save-rules-json rules)
+      (let ((loaded (languagetool-load-rules-json)))
+        (should (equal (gethash "/tmp/test1.txt" loaded) '("RULE_A" "RULE_B")))
+        (should (equal (gethash "/tmp/test2.txt" loaded) '("RULE_C")))))))
+
+(ert-deftest languagetool-test-get-rules-for-file ()
+  "Test getting disabled rules for a specific file."
+  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json")))
+    (let ((rules (make-hash-table :test 'equal)))
+      (puthash "/tmp/test3.txt" '("RULE_X" "RULE_Y") rules)
+      (languagetool-save-rules-json rules)
+      (should (equal (languagetool-get-rules-for-file "/tmp/test3.txt")
+                     '("RULE_X" "RULE_Y")))
+      (should (equal (languagetool-get-rules-for-file "/tmp/unknown.txt")
+                     '())))))
+
+(ert-deftest languagetool-test-update-rule-for-file ()
+  "Test adding and removing rules for a file."
+  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json"))
+        (file "/tmp/test4.txt"))
+    ;; Add a rule
+    (languagetool-update-rule-for-file file "RULE_ADD")
+    (should (member "RULE_ADD" (languagetool-get-rules-for-file file)))
+    ;; Add another rule
+    (languagetool-update-rule-for-file file "RULE_OTHER")
+    (should (member "RULE_OTHER" (languagetool-get-rules-for-file file)))
+    ;; Remove a rule
+    (languagetool-update-rule-for-file file "RULE_ADD" t)
+    (should-not (member "RULE_ADD" (languagetool-get-rules-for-file file)))
+    ;; Remove a non-existing rule (should not error)
+    (languagetool-update-rule-for-file file "RULE_UNKNOWN" t)
+    (should-not (member "RULE_UNKNOWN" (languagetool-get-rules-for-file file)))))
+
+(ert-deftest languagetool-test-update-and-get-rules-for-current-buffer ()
+  "Test updating and getting rules for the current buffer's file."
+  (let ((languagetool-rules-json-path (make-temp-file "lt-rules" nil ".json")))
+    (with-temp-buffer
+      (let ((buffer-file-name "/tmp/test5.txt"))
+        (languagetool-update-rule-for-current-buffer "RULE_CUR")
+        (should (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))
+        (languagetool-update-rule-for-current-buffer "RULE_CUR" t)
+        (should-not (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))))))
+
+;; test.el ends here

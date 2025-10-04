@@ -135,7 +135,7 @@ More info at http://wiki.languagetool.org/command-line-options."
 Don't use this function, use `languagetool-server-mode' instead."
 	;; Start checking for LanguageTool server is able to handle requests
 	(languagetool-server-check-for-communication)
-
+	(languagetool-core-load-dict-file)
 	;; Add checking system to editing hooks
 	(add-hook 'after-change-functions #'languagetool-server-should-check nil t)
 	(add-hook 'post-command-hook #'languagetool-server-check-line-change nil t)
