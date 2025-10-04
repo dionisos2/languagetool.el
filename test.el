@@ -86,10 +86,8 @@
           (languagetool-api-key nil)
           (languagetool-username nil)
           (languagetool-suggestion-level nil)
-          (languagetool-disabled-rules nil)
-          (languagetool-local-disabled-rules nil))
+          (languagetool-disabled-rules nil))
       (let ((alist (languagetool-server-parse-request 1 10)))
-				(message "alist: %s" alist)
 				(should (member '("language" "fr") alist))
 				(should (member `("text" ,(buffer-substring-no-properties 1 10)) alist))
 				)
@@ -104,7 +102,7 @@
   (let ((json (buffer-substring-no-properties (point) (point-max))))
     (message "Réponse JSON: %s" json)
     (message "region-start: %d" region-start)
-    Optionnel : parser le JSON
+    ;; Optionnel : parser le JSON
     (let ((parsed (json-read-from-string json)))
       (message "JSON parsé: %S" parsed))
     ))
@@ -198,7 +196,7 @@
         (delete-file languagetool-rules-json-path))
       (when (file-directory-p temp-dir)
         (delete-directory temp-dir t)))))
-    
+
 
 
 (ert-deftest languagetool-test-get-rules-for-file ()
@@ -219,7 +217,7 @@
         (delete-file languagetool-rules-json-path))
       (when (file-directory-p temp-dir)
         (delete-directory temp-dir t)))))
-    
+
 
 
 (ert-deftest languagetool-test-update-rule-for-file ()
@@ -246,8 +244,8 @@
       (when (file-exists-p languagetool-rules-json-path)
         (delete-file languagetool-rules-json-path))
       (when (file-directory-p temp-dir)
-        (delete-directory temp-dir t)))))  
-    
+        (delete-directory temp-dir t)))))
+
 
 
 (ert-deftest languagetool-test-update-and-get-rules-for-current-buffer ()
@@ -266,7 +264,7 @@
       (when (file-exists-p languagetool-rules-json-path)
         (delete-file languagetool-rules-json-path))
       (when (file-directory-p temp-dir)
-        (delete-directory temp-dir t)))))  
-    
+        (delete-directory temp-dir t)))))
+
 
 ;; test.el ends here

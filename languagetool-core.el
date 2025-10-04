@@ -156,14 +156,6 @@ Each element is a cons-cell with the form (CODE . NAME)."
           (const nil)
           (repeat string)))
 
-(defcustom languagetool-local-disabled-rules nil
-  "LanguageTool buffer local disabled rules."
-  :group 'languagetool
-  :local t
-  :type '(choice
-          (const nil)
-          (repeat string)))
-
 (defcustom languagetool-hint-function
   'languagetool-core-hint-default-function
   "Display error information in the minibuffer.
@@ -304,8 +296,6 @@ This means the word should be ignored and not corrected."
                (> (nth 7 (file-attributes languagetool-rules-json-path)) 0))
       (condition-case err
           (let ((json-data (json-read-file languagetool-rules-json-path)))
-            (message "DEBUG: JSON data loaded: %S" json-data)
-            (message "DEBUG: JSON data type: %S" (type-of json-data))
             (when json-data
               ;; Handle JSON as alist of (key . value) pairs
               (if (and (listp json-data) (consp (car json-data)))
@@ -313,8 +303,6 @@ This means the word should be ignored and not corrected."
                     (when (consp pair)
                       (let ((key (car pair))
                             (value (cdr pair)))
-                        (message "DEBUG: Processing pair - key: %S, value: %S, value-type: %S"
-                                 key value (type-of value))
                         ;; Convert symbol key to string if needed
                         (when (symbolp key)
                           (setq key (symbol-name key)))
@@ -323,37 +311,32 @@ This means the word should be ignored and not corrected."
                           (when (vectorp value)
                             (setq value (append value nil)))
                           (when (listp value)
-                            (message "DEBUG: Adding to hash table - key: %S, value: %S"
-                                     key value)
                             (puthash key value ht))))))
-                (message "DEBUG: Unexpected JSON format - not an alist: %S" json-data)))
+								)
+							)
             )
         (error
          (message "ERROR: Could not parse LanguageTool rules JSON file: %s"
                   (error-message-string err))))
-      (message "DEBUG: Final hash table contents:")
-      (maphash (lambda (k v) (message "DEBUG:   %S -> %S" k v)) ht))
-    ht))
+      )
+    ht)
+	)
 
 (defun languagetool-save-rules-json (rules)
   "Save the LanguageTool disabled rules dictionary to the JSON file."
   (unless (file-directory-p languagetool-dict-directory)
     (make-directory languagetool-dict-directory t))
   (let (alist)
-    (message "DEBUG: Saving rules hash table:")
-    (maphash (lambda (k v)
-               (message "DEBUG:   %S -> %S" k v))
-             rules)
     (maphash (lambda (k v)
                (push (cons k v) alist))
              rules)
     (setq alist (nreverse alist))
-    (message "DEBUG: Alist to be saved: %S" alist)
     (let ((json-string (json-encode alist)))
-      (message "DEBUG: JSON string to be written: %S" json-string)
       (with-temp-file languagetool-rules-json-path
         (insert json-string))
-      (message "DEBUG: JSON file written to: %S" languagetool-rules-json-path))))
+      )
+		)
+	)
 
 (defun languagetool-get-rules-for-file (file)
   "Return the list of disabled rule IDs for the given FILE."

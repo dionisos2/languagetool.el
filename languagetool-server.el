@@ -306,7 +306,7 @@ used in the POST request made to the LanguageTool server."
 		;; Appends the disabled rules
 		(let ((rules))
 			;; Global disabled rules
-			(setq rules (string-join (append languagetool-disabled-rules languagetool-local-disabled-rules) ","))
+			(setq rules (string-join (append languagetool-disabled-rules (languagetool-get-rules-for-current-buffer)) ","))
 			(unless (string= rules "")
 				(push (list "disabledRules" rules) arguments)))
 

@@ -133,7 +133,7 @@ for this package to work."
       (push (list "--level" (upcase languagetool-suggestion-level)) arguments))
 
     ;; Appends the disabled rules
-    (let ((rules (string-join (append languagetool-disabled-rules languagetool-local-disabled-rules) ",")))
+    (let ((rules (string-join (append languagetool-disabled-rules (languagetool-get-rules-for-current-buffer)) ",")))
       (unless (string= rules "")
         (push (list "--disable" rules) arguments )))
     (flatten-tree (reverse arguments))))
