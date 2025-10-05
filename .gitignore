@@ -12,3 +12,5 @@
 
 # Environment variables
 env.mk
+
+.plandex-v2/
