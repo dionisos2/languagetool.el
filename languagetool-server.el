@@ -526,7 +526,7 @@ end and length into the ARGS argument."
 
 (defun languagetool-server-send-request (&optional start end)
 	"Send a request to the server and parse the output given."
-	(message "Send request to languagetool")
+	;; (message "Send request to languagetool")
 	(let* ((region-start (or start (point-min)))
 				 (region-end (or end (point-max)))
 				 (url-request-method "POST")
@@ -540,7 +540,7 @@ end and length into the ARGS argument."
 
 (defun languagetool-server-highlight-matches (_status checking-buffer region-start)
   "Highlight LanguageTool Server issues in CHECKING-BUFFER for region starting at REGION-START."
-  (message "Request received from languagetool")
+  ;; (message "Request received from languagetool")
   (when (/= (symbol-value 'url-http-response-status) 200)
     (error "LanguageTool Server closed"))
   (unless languagetool-server-correcting-p

@@ -12,6 +12,13 @@
 (require 'languagetool-server)
 (require 'languagetool-issue)
 
+(defun languagetool-ignore-time-format-p (word)
+  "Return t if WORD is a valid time format like '10h10', '23h59', etc."
+  (when (string-match "^\\([0-9]\\{1,2\\}\\)[hH]\\([0-9]\\{2\\}\\)$" word)
+    (let ((hours (string-to-number (match-string 1 word)))
+          (minutes (string-to-number (match-string 2 word))))
+      (and (<= 0 hours 23) (<= 0 minutes 59)))))
+
 (use-package languagetool
   :demand
   :load-path "~/projets/programmation/emacs/languagetool.el"
@@ -41,7 +48,10 @@
   (languagetool-server-lines-before 10)
   (languagetool-server-lines-after 10)
   (languagetool-correction-keys (string-to-vector "auienrstdoygov123456789"))
+	(languagetool-server-use-visible-text-mode t)
   )
+
+(add-to-list 'languagetool-core-correct-predicates #'languagetool-ignore-time-format-p)
 
 (ert-deftest languagetool-test-region-around-point-middle ()
   "Test extraction arround the points in the middle of the buffer."
@@ -119,7 +129,7 @@
   (> (length word) 20))
 
 ;; Add the predicate
-(add-to-list 'languagetool-core-correct-predicates #'my-ignore-long-words-p)
+;; (add-to-list 'languagetool-core-correct-predicates #'my-ignore-long-words-p)
 
 ;; Remove the predicate
 ;; (setq languagetool-core-correct-predicates
