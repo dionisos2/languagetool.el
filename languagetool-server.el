@@ -103,15 +103,6 @@ checking around the cursor position."
 	:group 'languagetool-server
 	:type 'boolean)
 
-(defcustom languagetool-server-visible-text-debounce-delay 0.5
-	"Delay in seconds before checking visible text after changes.
-
-This applies to visible text mode when the visible content changes due to
-scrolling or window resizing. A shorter delay provides more responsive
-checking but may impact performance with rapid scrolling."
-	:group 'languagetool-server
-	:type 'number)
-
 (defvar languagetool-server-output-buffer-name "*LanguageTool Server Output*"
 	"LanguageTool Server output buffer for debugging.")
 
@@ -135,12 +126,6 @@ content hasn't actually changed.")
 
 Used in visible text mode to track when the visible region has changed
 due to scrolling or window resizing.")
-
-(defvar-local languagetool-server-visible-text-timer nil
-	"Timer for debouncing visible text changes.
-
-Used in visible text mode to delay checking after rapid scrolling or
-window resize events.")
 
 (defvar languagetool-server-correcting-p nil
 	"Set to non-nil if correcting errors, nil otherwise.")
@@ -177,18 +162,15 @@ Don't use this function, use `languagetool-server-mode' instead."
 
   ;; Clean up ALL hooks and timers first to prevent conflicts
   (remove-hook 'after-change-functions #'languagetool-server-should-check t)
-  (remove-hook 'post-command-hook #'languagetool-server-check-line-change t)
-  (remove-hook 'after-change-functions #'languagetool-server-handle-visible-text-change t)
-  (remove-hook 'window-scroll-functions #'languagetool-server-handle-window-scroll t)
-  (remove-hook 'window-size-change-functions #'languagetool-server-handle-window-size-change t)
+  (remove-hook 'post-command-hook #'languagetool-server-should-check t)
+  (remove-hook 'after-change-functions #'languagetool-server-should-check t)
+  (remove-hook 'window-scroll-functions #'languagetool-server-should-check t)
+  (remove-hook 'window-size-change-functions #'languagetool-server-should-check t)
 
   ;; Cancel any existing timers
   (when (timerp languagetool-server-check-timer)
     (cancel-timer languagetool-server-check-timer)
     (setq languagetool-server-check-timer nil))
-  (when (timerp languagetool-server-visible-text-timer)
-    (cancel-timer languagetool-server-visible-text-timer)
-    (setq languagetool-server-visible-text-timer nil))
 
   ;; Clear caches
   (setq languagetool-server-visible-text-cache nil)
@@ -198,20 +180,21 @@ Don't use this function, use `languagetool-server-mode' instead."
   (if languagetool-server-use-visible-text-mode
       (progn
         ;; Visible text mode: check on text changes and window events
-        (add-hook 'after-change-functions #'languagetool-server-handle-visible-text-change nil t)
-        (add-hook 'window-scroll-functions #'languagetool-server-handle-window-scroll nil t)
-        (add-hook 'window-size-change-functions #'languagetool-server-handle-window-size-change nil t)
-        ;; Initial check of visible text
-        (languagetool-server-handle-visible-text-change))
+        (add-hook 'after-change-functions #'languagetool-server-should-check nil t)
+        (add-hook 'window-scroll-functions #'languagetool-server-should-check nil t)
+        (add-hook 'window-size-change-functions #'languagetool-server-should-check nil t))
     ;; Line-based mode: check on line changes
     (add-hook 'after-change-functions #'languagetool-server-should-check nil t)
-    (add-hook 'post-command-hook #'languagetool-server-check-line-change nil t))
+    (add-hook 'post-command-hook #'languagetool-server-should-check nil t))
+
+	;; Initial check of visible text
+  (languagetool-server-should-check)
 
   ;; Init hint timer in the current buffer if not already
   (setq languagetool-core-hint-timer
         (run-with-idle-timer languagetool-hint-idle-delay t
                              languagetool-hint-function)))
-    
+
 
 
 (defun languagetool-server-mode-off ()
@@ -223,18 +206,15 @@ Don't use this function, use `languagetool-server-mode' instead."
 
   ;; Remove ALL hooks completely (both modes)
   (remove-hook 'after-change-functions #'languagetool-server-should-check t)
-  (remove-hook 'post-command-hook #'languagetool-server-check-line-change t)
-  (remove-hook 'after-change-functions #'languagetool-server-handle-visible-text-change t)
-  (remove-hook 'window-scroll-functions #'languagetool-server-handle-window-scroll t)
-  (remove-hook 'window-size-change-functions #'languagetool-server-handle-window-size-change t)
+  (remove-hook 'post-command-hook #'languagetool-server-should-check t)
+  (remove-hook 'after-change-functions #'languagetool-server-should-check t)
+  (remove-hook 'window-scroll-functions #'languagetool-server-should-check t)
+  (remove-hook 'window-size-change-functions #'languagetool-server-should-check t)
 
   ;; Cancel ALL timers
   (when (timerp languagetool-server-check-timer)
     (cancel-timer languagetool-server-check-timer)
     (setq languagetool-server-check-timer nil))
-  (when (timerp languagetool-server-visible-text-timer)
-    (cancel-timer languagetool-server-visible-text-timer)
-    (setq languagetool-server-visible-text-timer nil))
 
   ;; Clear ALL caches
   (setq languagetool-server-visible-text-cache nil)
@@ -242,7 +222,7 @@ Don't use this function, use `languagetool-server-mode' instead."
 
   ;; Delete all LanguageTool overlays
   (languagetool-core-clear-buffer))
-    
+
 
 
 (defun languagetool-server-class-p ()
@@ -412,7 +392,8 @@ used in the POST request made to the LanguageTool server."
 WINDOW defaults to the selected window. Uses `window-start' and `window-end'
 to determine the boundaries of text currently visible in the window."
 	(let ((win (or window (selected-window))))
-		(cons (window-start win) (window-end win))))
+		(cons (window-start win) (window-end win)))
+	)
 
 (defun languagetool-server-get-visible-text (&optional window)
 	"Return the text content currently visible in WINDOW.
@@ -424,6 +405,14 @@ WINDOW defaults to the selected window. Returns the text between
 				 (end (cdr region)))
 		(buffer-substring-no-properties start end)))
 
+(defun languagetool-server-line-changed-p ()
+  "Check grammar only if the cursor line has changed."
+  (unless (eq (line-number-at-pos) languagetool-server--last-line)
+    (setq languagetool-server--last-line (line-number-at-pos))
+    t)
+	)
+
+
 
 (defun languagetool-server-visible-text-changed-p (&optional window)
   "Return non-nil if the visible text content has changed since last check.
@@ -431,69 +420,20 @@ WINDOW defaults to the selected window. Returns the text between
 WINDOW defaults to the selected window. Compares the current visible
 region and text content against the cached values in buffer-local
 variables. Updates the cache if content has changed."
-  (when languagetool-server-use-visible-text-mode
-    (let* ((current-region (languagetool-server-get-visible-region window))
-           (current-text (languagetool-server-get-visible-text window))
-           (region-changed (not (equal current-region languagetool-server-visible-region-cache)))
-           (text-changed (not (equal current-text languagetool-server-visible-text-cache))))
-      (when (or region-changed text-changed
-                ;; Always detect change if cache is empty
-                (null languagetool-server-visible-text-cache)
-                (null languagetool-server-visible-region-cache))
-        ;; Update cache with new values
-        (setq languagetool-server-visible-region-cache current-region)
-        (setq languagetool-server-visible-text-cache current-text)
-        t))))
-    
-
-(defun languagetool-server-handle-window-scroll (window display-start)
-	"Handle window scroll events for visible text mode.
-
-WINDOW is the window that scrolled and DISPLAY-START is the new start position.
-This function is designed to be used with `window-scroll-functions'."
-	(when (and languagetool-server-use-visible-text-mode
-						 languagetool-server-mode
-						 (eq window (selected-window))
-						 (eq (window-buffer window) (current-buffer)))
-		(languagetool-server-handle-visible-text-change)))
-
-(defun languagetool-server-handle-window-size-change (frame)
-	"Handle window size change events for visible text mode.
-
-FRAME is the frame whose window configuration changed.
-This function is designed to be used with `window-size-change-functions'."
-	(when (and languagetool-server-use-visible-text-mode
-						 languagetool-server-mode
-						 (eq frame (selected-frame)))
-		(languagetool-server-handle-visible-text-change)))
-
-
-(defun languagetool-server-handle-visible-text-change (&optional beg end len)
-  "Handle changes to visible text content with debouncing.
-
-BEG, END, and LEN are the standard arguments from `after-change-functions'.
-This function checks if the visible text has actually changed and schedules
-a grammar check after the debounce delay. It cancels any existing timer to
-avoid redundant checks during rapid changes."
-  (when (and languagetool-server-use-visible-text-mode
-             languagetool-server-mode)
-    ;; Invalidate cache when text changes
-    (when (and beg end)
-      (setq languagetool-server-visible-text-cache nil)
-      (setq languagetool-server-visible-region-cache nil))
-
-    ;; Check if visible content has changed
-    (when (languagetool-server-visible-text-changed-p)
-      ;; Cancel existing timer if any
-      (when (timerp languagetool-server-visible-text-timer)
-        (cancel-timer languagetool-server-visible-text-timer))
-
-      ;; Schedule new check after debounce delay
-      (setq languagetool-server-visible-text-timer
-            (run-with-timer languagetool-server-visible-text-debounce-delay
-                            nil
-                            #'languagetool-server-check-visible-text)))))
-    
+  (let* ((current-region (languagetool-server-get-visible-region window))
+         (current-text (languagetool-server-get-visible-text window))
+         (region-changed (not (equal current-region languagetool-server-visible-region-cache)))
+         (text-changed (not (equal current-text languagetool-server-visible-text-cache))))
+    (when (or region-changed text-changed
+              ;; Always detect change if cache is empty
+              (null languagetool-server-visible-text-cache)
+              (null languagetool-server-visible-region-cache))
+      ;; Update cache with new values
+      (setq languagetool-server-visible-region-cache current-region)
+      (setq languagetool-server-visible-text-cache current-text)
+      t)
+		)
+	)
 
 (defun languagetool-server-check-visible-text ()
 	"Check the currently visible text region for grammar issues."
@@ -514,15 +454,29 @@ avoid redundant checks during rapid changes."
 			(languagetool-server-send-request start end))))
 
 (defun languagetool-server-should-check (&rest _args)
-	"Tell the package to send a request if there are no more edit commands in a time.
+  "Schedule a LanguageTool check if the buffer content or visible region has changed.
 
-When attached to `after-change-functions', Emacs sends the begin,
-end and length into the ARGS argument."
-	(when (timerp languagetool-server-check-timer)
-		(cancel-timer languagetool-server-check-timer))
+This function unifies debouncing and cache-based change detection for both
+visible text mode and line-based mode. It cancels any existing timer, checks
+if a correction is already in progress, and only schedules a new check if
+the relevant region or text has changed."
+  (when (timerp languagetool-server-check-timer)
+    (cancel-timer languagetool-server-check-timer))
+	(let ((check-change-function (if languagetool-server-use-visible-text-mode
+																#'languagetool-server-visible-text-changed-p
+															#'languagetool-server-line-changed-p))
+				(update-function (if languagetool-server-use-visible-text-mode
+																#'languagetool-server-check-visible-text
+													 #'languagetool-server-check-region-around-point))
+				)
+		(when (and (not languagetool-server-correcting-p) (funcall check-change-function))
+				(setq languagetool-server-check-timer
+							(run-with-timer languagetool-server-check-delay nil (lambda() (funcall update-function)))
+							)
+				)
+		)
+	)
 
-	(unless languagetool-server-correcting-p
-		(setq languagetool-server-check-timer (run-with-timer languagetool-server-check-delay nil #'languagetool-server-check-region-around-point))))
 
 (defun languagetool-server-send-request (&optional start end)
 	"Send a request to the server and parse the output given."
@@ -579,7 +533,7 @@ unnecessary clearing and redrawing when only part of the visible text changes."
       (dolist (ov (overlays-in region-start region-end))
         (when (overlay-get ov 'languagetool-message)
           (delete-overlay ov))))))
-    
+
 
 (provide 'languagetool-server)
 

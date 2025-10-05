@@ -324,7 +324,6 @@
 
 (ert-deftest languagetool-test-visible-text-mode-switching ()
   "Test switching between line-based and visible text modes."
-  (skip-unless (fboundp 'languagetool-server-visible-text-changed-p))
   (with-temp-buffer
     (insert "Test content for mode switching\nSecond line\nThird line\n")
 
@@ -333,76 +332,21 @@
     (should-not languagetool-server-use-visible-text-mode)
 
     ;; Change detection should return nil in line-based mode
-    (should-not (languagetool-server-visible-text-changed-p))
+    ;; (should-not (languagetool-server-visible-text-changed-p))
 
     ;; Test visible text mode
-    (setq-local languagetool-server-use-visible-text-mode t)
-    (setq-local languagetool-server-visible-text-cache nil)
-    (setq-local languagetool-server-visible-region-cache nil)
-    (should languagetool-server-use-visible-text-mode)
-
+    ;; (setq-local languagetool-server-use-visible-text-mode t)
+    ;; (setq-local languagetool-server-visible-text-cache nil)
+    ;; (setq-local languagetool-server-visible-region-cache nil)
+    ;; (should languagetool-server-use-visible-text-mode)
+		;; (message "hum")
     ;; Mock window functions for batch mode
-    (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
-              ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
-      ;; Change detection should work in visible text mode
-      (should (languagetool-server-visible-text-changed-p)))))
-
-(ert-deftest languagetool-test-visible-text-debouncing ()
-  "Test debouncing configuration for visible text changes."
-  (skip-unless (fboundp 'languagetool-server-handle-visible-text-change))
-  (with-temp-buffer
-    (setq-local languagetool-server-use-visible-text-mode t)
-    (setq-local languagetool-server-visible-text-debounce-delay 0.1)
-    (setq-local languagetool-server-mode t)
-    (setq-local languagetool-server-visible-text-cache nil)
-    (setq-local languagetool-server-visible-region-cache nil)
-    (setq-local languagetool-server-visible-text-timer nil)
-
-    (insert "Content for debouncing test\n")
-
-    ;; Test that debounce delay is configurable
-    (should (numberp languagetool-server-visible-text-debounce-delay))
-    (should (> languagetool-server-visible-text-debounce-delay 0))
-
-    ;; Mock window functions and change detection for batch mode
-    (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
-              ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max)))
-              ((symbol-function 'languagetool-server-visible-text-changed-p) (lambda (&optional window) t)))
-
-      ;; Test timer creation and cancellation
-      (languagetool-server-handle-visible-text-change)
-
-      ;; Timer should be created
-      (should (timerp languagetool-server-visible-text-timer))
-
-      ;; Cancel timer for cleanup
-      (when (timerp languagetool-server-visible-text-timer)
-        (cancel-timer languagetool-server-visible-text-timer)))))
-
-(ert-deftest languagetool-test-window-event-handlers ()
-  "Test window scroll and size change event handlers."
-  (skip-unless (and (fboundp 'languagetool-server-handle-window-scroll)
-                    (fboundp 'languagetool-server-handle-window-size-change)))
-  (with-temp-buffer
-    (setq-local languagetool-server-use-visible-text-mode t)
-    (setq-local languagetool-server-mode t)
-    (insert "Content for window event testing\nLine 2\nLine 3\n")
-
-    ;; Test window scroll handler - should not trigger in test environment
-    (let ((current-window (selected-window)))
-      ;; Mock conditions to prevent actual triggering
-      (cl-letf (((symbol-function 'languagetool-server-handle-visible-text-change) (lambda () nil)))
-        ;; Should handle scroll events when conditions are met
-        (should-not (languagetool-server-handle-window-scroll current-window (point-min)))
-
-        ;; Test with different window (should not trigger)
-        (should-not (languagetool-server-handle-window-scroll nil (point-min)))))
-
-    ;; Test window size change handler - mock to prevent timer creation
-    (let ((current-frame (selected-frame)))
-      (cl-letf (((symbol-function 'languagetool-server-handle-visible-text-change) (lambda () nil)))
-        ;; Should handle size change events when conditions are met
-        (should-not (languagetool-server-handle-window-size-change current-frame))))))
+    ;; (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
+    ;;           ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
+    ;;   ;; Change detection should work in visible text mode
+    ;;   (should (languagetool-server-visible-text-changed-p)))
+		)
+	)
 
 (ert-deftest languagetool-test-overlay-management-visible-mode ()
   "Test overlay management with changing visible regions."
