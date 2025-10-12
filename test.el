@@ -307,11 +307,10 @@
     (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
               ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
 
-      ;; First check should detect change (cache is empty)
       (should (languagetool-server-text-changed-p))
-
-      ;; Second check should not detect change (cache is populated)
-      (should-not (languagetool-server-text-changed-p))
+      (should (languagetool-server-text-changed-p))
+			(languagetool-server-update-cache)
+			(should-not (languagetool-server-text-changed-p))
 
       ;; Modify buffer content
       (goto-char (point-max))
@@ -319,9 +318,9 @@
 
       ;; Should detect change after content modification
       (should (languagetool-server-text-changed-p))
-
-      ;; Should not detect change again
-      (should-not (languagetool-server-text-changed-p)))))
+			)
+		)
+	)
 
 (ert-deftest languagetool-test-visible-text-mode-switching ()
   "Test switching between line-based and visible text modes."
@@ -340,6 +339,8 @@
 			(should-not languagetool-server-text-cache)
 			(should (equal (languagetool-server-get-text) " content f"))
 			(should (languagetool-server-text-changed-p))
+			(should (languagetool-server-text-changed-p))
+			(languagetool-server-update-cache)
 			(should-not (languagetool-server-text-changed-p))
 			)
 

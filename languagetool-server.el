@@ -438,15 +438,15 @@ WINDOW defaults to the selected window. Compares the current visible
 region and text content against the cached values in buffer-local
 variables. Updates the cache if content has changed."
 	(interactive)
-  (let* ((current-region (languagetool-server-get-region window))
-         (current-text (languagetool-server-get-text window))
-         (region-changed (not (equal current-region languagetool-server-region-cache)))
-         (text-changed (not (equal current-text languagetool-server-text-cache))))
-    (when (or region-changed text-changed
-              ;; Always detect change if cache is empty
-              (null languagetool-server-text-cache)
-              (null languagetool-server-region-cache))
-      t)
+  (let ((current-region (languagetool-server-get-region window))
+         (current-text (languagetool-server-get-text window)))
+    (or
+		 (not (equal current-text languagetool-server-text-cache))
+		 (not (equal current-region languagetool-server-region-cache))
+     ;; Always detect change if cache is empty
+     (null languagetool-server-text-cache)
+     (null languagetool-server-region-cache)
+		 )
 		)
 	)
 
@@ -463,7 +463,7 @@ variables. Updates the cache if content has changed."
 (defun languagetool-server-check-region ()
 	"Check the currently visible text region for grammar issues."
 	(interactive)
-	(message "CHECH region")
+	;; (message "CHECH region")
 	(when languagetool-server-mode
 		(let* ((region (languagetool-server-get-region))
 					 (start (car region))
@@ -483,13 +483,14 @@ the relevant region or text has changed."
   (when (timerp languagetool-server-check-timer)
     (cancel-timer languagetool-server-check-timer)
 		(setq languagetool-server-check-timer nil)
-		(message "Cancel timer"))
+		;; (message "Cancel timer")
+		)
 
 		(when (and (not languagetool-server-correcting-p) (languagetool-server-text-changed-p))
-			(message "Add timer")
+			;; (message "Add timer")
 			(setq languagetool-server-check-timer
 							(run-with-timer languagetool-server-check-delay nil #'languagetool-server-check-region))
-			(message "Added")
+			;; (message "Added")
 			)
 		)
 
