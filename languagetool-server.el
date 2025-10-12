@@ -446,10 +446,17 @@ variables. Updates the cache if content has changed."
               ;; Always detect change if cache is empty
               (null languagetool-server-text-cache)
               (null languagetool-server-region-cache))
-      ;; Update cache with new values
-      (setq languagetool-server-region-cache current-region)
-      (setq languagetool-server-text-cache current-text)
       t)
+		)
+	)
+
+(defun languagetool-server-update-cache (&optional window)
+	"Update cache with the current region of text."
+	(interactive)
+  (let ((current-region (languagetool-server-get-region window))
+        (current-text (languagetool-server-get-text window)))
+		(setq languagetool-server-region-cache current-region)
+		(setq languagetool-server-text-cache current-text)
 		)
 	)
 
@@ -461,7 +468,10 @@ variables. Updates the cache if content has changed."
 		(let* ((region (languagetool-server-get-region))
 					 (start (car region))
 					 (end (cdr region)))
-			(languagetool-server-send-request start end))))
+			(languagetool-server-send-request start end))
+		(languagetool-server-update-cache)
+		)
+	)
 
 (defun languagetool-server-should-check (&rest _args)
   "Schedule a LanguageTool check if the buffer content or visible region has changed.
@@ -471,7 +481,10 @@ visible text mode and line-based mode. It cancels any existing timer, checks
 if a correction is already in progress, and only schedules a new check if
 the relevant region or text has changed."
   (when (timerp languagetool-server-check-timer)
-    (cancel-timer languagetool-server-check-timer))
+    (cancel-timer languagetool-server-check-timer)
+		(setq languagetool-server-check-timer nil)
+		(message "Cancel timer"))
+
 		(when (and (not languagetool-server-correcting-p) (languagetool-server-text-changed-p))
 			(message "Add timer")
 			(setq languagetool-server-check-timer
