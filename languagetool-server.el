@@ -93,73 +93,33 @@ More info at http://wiki.languagetool.org/command-line-options."
 	:group 'languagetool-server
 	:type 'number)
 
-(defcustom languagetool-server-use-visible-text-mode nil
-	"When non-nil, check visible text in window instead of lines around point.
-
-When enabled, LanguageTool will check all text currently visible in the
-window and trigger checks when the visible content changes due to scrolling,
-window resizing, or editing. When disabled, uses the traditional line-based
-checking around the cursor position."
-	:group 'languagetool-server
-	:type 'boolean)
-
-(defvar languagetool-server-output-buffer-name "*LanguageTool Server Output*"
-	"LanguageTool Server output buffer for debugging.")
-
-(defvar languagetool-server-process nil
-	"LanguageTool Server inferior process reference if any.")
-
 (defvar-local languagetool-server-check-timer nil
 	"Hold idle time that send request to LanguageTool server.")
 
-(defvar-local languagetool-server-open-communication-p nil
-	"Set to non-nil if server communication is open, nil otherwise.")
-
-(defvar-local languagetool-server-visible-text-cache nil
+(defvar-local languagetool-server-text-cache nil
 	"Cache of the last visible text content that was checked.
 
 Used in visible text mode to avoid redundant checks when the visible
 content hasn't actually changed.")
 
-(defvar-local languagetool-server-visible-region-cache nil
+(defvar-local languagetool-server-region-cache nil
 	"Cache of the last visible region boundaries (start . end).
 
 Used in visible text mode to track when the visible region has changed
 due to scrolling or window resizing.")
 
-(defvar languagetool-server-correcting-p nil
-	"Set to non-nil if correcting errors, nil otherwise.")
+(defalias 'languagetool-server-window-start
+  (lambda (&optional window) (window-start window))
+	"Alias to mock of window-start")
 
-;; Function definitions:
-
-;;;###autoload
-(define-minor-mode languagetool-server-mode
-	"Toggle LanguageTool issue highlighting."
-	:group 'languagetool-server
-	:lighter " LT"
-	(if languagetool-server-mode
-			(languagetool-server-mode-on)
-		(languagetool-server-mode-off)))
-
-(defvar-local languagetool-server--last-line nil
-  "Stores the last line number for LanguageTool server checks.")
-
-(defun languagetool-server-check-line-change ()
-  "Check grammar only if the cursor line has changed."
-  (let ((current-line (line-number-at-pos)))
-    (unless (eq current-line languagetool-server--last-line)
-      (setq languagetool-server--last-line current-line)
-      (languagetool-server-should-check))))
+(defalias 'languagetool-server-window-end
+  (lambda (&optional window &rest _) (window-end window t))
+	"Alias to mock of window-end")
 
 
-(defun languagetool-server-mode-on ()
-  "Turn on LanguageTool Server mode.
 
-Don't use this function, use `languagetool-server-mode' instead."
-  ;; Start checking for LanguageTool server is able to handle requests
-  (languagetool-server-check-for-communication)
-  (languagetool-core-load-dict-file)
-
+(defun languagetool-server-clear()
+	"Clean hooks, timers, caches."
   ;; Clean up ALL hooks and timers first to prevent conflicts
   (remove-hook 'after-change-functions #'languagetool-server-should-check t)
   (remove-hook 'post-command-hook #'languagetool-server-should-check t)
@@ -172,30 +132,105 @@ Don't use this function, use `languagetool-server-mode' instead."
     (cancel-timer languagetool-server-check-timer)
     (setq languagetool-server-check-timer nil))
 
-  ;; Clear caches
-  (setq languagetool-server-visible-text-cache nil)
-  (setq languagetool-server-visible-region-cache nil)
+	(when (timerp languagetool-core-hint-timer)
+		(cancel-timer languagetool-core-hint-timer)
+		(setq languagetool-core-hint-timer nil))
 
-  ;; Add checking system based on mode
-  (if languagetool-server-use-visible-text-mode
-      (progn
-        ;; Visible text mode: check on text changes and window events
-        (add-hook 'after-change-functions #'languagetool-server-should-check nil t)
-        (add-hook 'window-scroll-functions #'languagetool-server-should-check nil t)
-        (add-hook 'window-size-change-functions #'languagetool-server-should-check nil t))
-    ;; Line-based mode: check on line changes
-    (add-hook 'after-change-functions #'languagetool-server-should-check nil t)
-    (add-hook 'post-command-hook #'languagetool-server-should-check nil t))
+	;; Clear caches
+  (setq languagetool-server-text-cache nil)
+  (setq languagetool-server-region-cache nil)
+	)
 
+(defun languagetool-server-activate-check-visible-text ()
+	"Activate LanguageTool highlighting for all visible text."
+	(interactive)
+	(set-default 'languagetool-server-check-visible-text t)
+	(languagetool-server-clear)
+	(add-hook 'after-change-functions #'languagetool-server-should-check nil t)
+	(add-hook 'window-scroll-functions #'languagetool-server-should-check nil t)
+	(add-hook 'window-size-change-functions #'languagetool-server-should-check nil t)
+	)
+
+(defun languagetool-server-desactivate-check-visible-text ()
+	"Desactivate LanguageTool highlighting for all visible text."
+	(interactive)
+	(set-default 'languagetool-server-check-visible-text nil)
+	(languagetool-server-clear)
+	(add-hook 'after-change-functions #'languagetool-server-should-check nil t)
+  (add-hook 'post-command-hook #'languagetool-server-should-check nil t)
+	)
+
+;;;###autoload
+(define-minor-mode languagetool-server-mode
+	"Toggle LanguageTool issue highlighting."
+	:group 'languagetool-server
+	:lighter " LT"
+	(if languagetool-server-mode
+			(languagetool-server-mode-on)
+		(languagetool-server-mode-off)))
+
+(defun languagetool-server-check-visible-text--set (symbol value)
+	"Set languagetool-server-check-visible-text."
+	(set-default symbol value)
+
+	(if languagetool-server-mode
+			(if value
+					(languagetool-server-activate-check-visible-text)
+				(languagetool-server-desactivate-check-visible-text)
+				)
+		)
+	)
+
+(defcustom languagetool-server-check-visible-text nil
+	"If non-nil, activate LanguageTool highlighting for all visible text."
+	:group 'languagetool-server
+	:type 'boolean
+	:set #'languagetool-server-check-visible-text--set
+	)
+
+(defvar languagetool-server-output-buffer-name "*LanguageTool Server Output*"
+	"LanguageTool Server output buffer for debugging.")
+
+(defvar languagetool-server-process nil
+	"LanguageTool Server inferior process reference if any.")
+
+(defvar-local languagetool-server-open-communication-p nil
+	"Set to non-nil if server communication is open, nil otherwise.")
+
+(defvar languagetool-server-correcting-p nil
+	"Set to non-nil if correcting errors, nil otherwise.")
+
+;; Function definitions:
+
+(defvar-local languagetool-server--last-line nil
+  "Stores the last line number for LanguageTool server checks.")
+
+(defun languagetool-server-check-line-change ()
+  "Check grammar only if the cursor line has changed."
+  (let ((current-line (line-number-at-pos)))
+    (unless (eq current-line languagetool-server--last-line)
+      (setq languagetool-server--last-line current-line)
+      (languagetool-server-should-check))))
+
+(defun languagetool-server-mode-on ()
+  "Turn on LanguageTool Server mode.
+
+Don't use this function, use `languagetool-server-mode' instead."
+  ;; Start checking for LanguageTool server is able to handle requests
+  (languagetool-server-check-for-communication)
+  (languagetool-core-load-dict-file)
+
+	(if languagetool-server-check-visible-text
+			(languagetool-server-activate-check-visible-text)
+		(languagetool-server-desactivate-check-visible-text)
+		)
 	;; Initial check of visible text
   (languagetool-server-should-check)
 
   ;; Init hint timer in the current buffer if not already
   (setq languagetool-core-hint-timer
         (run-with-idle-timer languagetool-hint-idle-delay t
-                             languagetool-hint-function)))
-
-
+														 languagetool-hint-function)))
 
 (defun languagetool-server-mode-off ()
   "Turn off LanguageTool Server mode.
@@ -204,24 +239,10 @@ Don't use this function, use `languagetool-server-mode' instead."
   ;; Turn off buffer local flag for server communication.
   (setq languagetool-server-open-communication-p nil)
 
-  ;; Remove ALL hooks completely (both modes)
-  (remove-hook 'after-change-functions #'languagetool-server-should-check t)
-  (remove-hook 'post-command-hook #'languagetool-server-should-check t)
-  (remove-hook 'after-change-functions #'languagetool-server-should-check t)
-  (remove-hook 'window-scroll-functions #'languagetool-server-should-check t)
-  (remove-hook 'window-size-change-functions #'languagetool-server-should-check t)
-
-  ;; Cancel ALL timers
-  (when (timerp languagetool-server-check-timer)
-    (cancel-timer languagetool-server-check-timer)
-    (setq languagetool-server-check-timer nil))
-
-  ;; Clear ALL caches
-  (setq languagetool-server-visible-text-cache nil)
-  (setq languagetool-server-visible-region-cache nil)
-
+	(languagetool-server-clear)
   ;; Delete all LanguageTool overlays
-  (languagetool-core-clear-buffer))
+  (languagetool-core-clear-buffer)
+	)
 
 
 
@@ -376,79 +397,68 @@ used in the POST request made to the LanguageTool server."
 		)
 	)
 
-(defun languagetool-server-region-around-point (lines-before lines-after)
+(defun languagetool-server-region-around-point (&optional line-before line-after)
 	"Return cons cell (start . end) for region around point, using line offsets."
-	(let ((start (save-excursion
-								 (forward-line (- lines-before))
+	(let* ((start (save-excursion
+								 (forward-line (- (or line-before languagetool-server-lines-before)))
 								 (line-beginning-position)))
-				(end (save-excursion
-							 (forward-line lines-after)
-							 (line-end-position))))
+				 (end (save-excursion
+								(forward-line (or line-after languagetool-server-lines-after))
+								(line-end-position))))
 		(cons start end)))
 
-(defun languagetool-server-get-visible-region (&optional window)
+(defun languagetool-server-get-region (&optional window)
 	"Return cons cell (start . end) for the visible text region in WINDOW.
+Or for region around point.
 
-WINDOW defaults to the selected window. Uses `window-start' and `window-end'
+WINDOW defaults to the selected window. Uses `languagetool-server-window-start' and `languagetool-server-window-end'
 to determine the boundaries of text currently visible in the window."
-	(let ((win (or window (selected-window))))
-		(cons (window-start win) (window-end win)))
+	(if languagetool-server-check-visible-text
+			(let ((win (or window (selected-window))))
+				(cons (funcall #'languagetool-server-window-start win) (funcall #'languagetool-server-window-end win)))
+		(languagetool-server-region-around-point)
+		)
 	)
 
-(defun languagetool-server-get-visible-text (&optional window)
+(defun languagetool-server-get-text (&optional window)
 	"Return the text content currently visible in WINDOW.
-
+Or for region around point
 WINDOW defaults to the selected window. Returns the text between
-`window-start' and `window-end' as a string with properties removed."
-	(let* ((region (languagetool-server-get-visible-region window))
+`languagetool-server-window-start' and `languagetool-server-window-end' as a string with properties removed."
+	(let* ((region (languagetool-server-get-region window))
 				 (start (car region))
 				 (end (cdr region)))
 		(buffer-substring-no-properties start end)))
 
-(defun languagetool-server-line-changed-p ()
-  "Check grammar only if the cursor line has changed."
-  (unless (eq (line-number-at-pos) languagetool-server--last-line)
-    (setq languagetool-server--last-line (line-number-at-pos))
-    t)
-	)
 
-
-
-(defun languagetool-server-visible-text-changed-p (&optional window)
+(defun languagetool-server-text-changed-p (&optional window)
   "Return non-nil if the visible text content has changed since last check.
 
 WINDOW defaults to the selected window. Compares the current visible
 region and text content against the cached values in buffer-local
 variables. Updates the cache if content has changed."
-  (let* ((current-region (languagetool-server-get-visible-region window))
-         (current-text (languagetool-server-get-visible-text window))
-         (region-changed (not (equal current-region languagetool-server-visible-region-cache)))
-         (text-changed (not (equal current-text languagetool-server-visible-text-cache))))
+	(interactive)
+  (let* ((current-region (languagetool-server-get-region window))
+         (current-text (languagetool-server-get-text window))
+         (region-changed (not (equal current-region languagetool-server-region-cache)))
+         (text-changed (not (equal current-text languagetool-server-text-cache))))
     (when (or region-changed text-changed
               ;; Always detect change if cache is empty
-              (null languagetool-server-visible-text-cache)
-              (null languagetool-server-visible-region-cache))
+              (null languagetool-server-text-cache)
+              (null languagetool-server-region-cache))
       ;; Update cache with new values
-      (setq languagetool-server-visible-region-cache current-region)
-      (setq languagetool-server-visible-text-cache current-text)
+      (setq languagetool-server-region-cache current-region)
+      (setq languagetool-server-text-cache current-text)
       t)
 		)
 	)
 
-(defun languagetool-server-check-visible-text ()
+(defun languagetool-server-check-region ()
 	"Check the currently visible text region for grammar issues."
-	(when (and languagetool-server-mode
-						 languagetool-server-use-visible-text-mode)
-		(let* ((region (languagetool-server-get-visible-region))
-					 (start (car region))
-					 (end (cdr region)))
-			(languagetool-server-send-request start end))))
-
-(defun languagetool-server-check-region-around-point ()
-	"Check the region around point using customizable line settings."
 	(interactive)
+	(message "CHECH region")
 	(when languagetool-server-mode
-		(let* ((region (languagetool-server-region-around-point languagetool-server-lines-before languagetool-server-lines-after))
+		(let* ((region (languagetool-server-get-region))
 					 (start (car region))
 					 (end (cdr region)))
 			(languagetool-server-send-request start end))))
@@ -462,21 +472,13 @@ if a correction is already in progress, and only schedules a new check if
 the relevant region or text has changed."
   (when (timerp languagetool-server-check-timer)
     (cancel-timer languagetool-server-check-timer))
-	(let ((check-change-function (if languagetool-server-use-visible-text-mode
-																#'languagetool-server-visible-text-changed-p
-															#'languagetool-server-line-changed-p))
-				(update-function (if languagetool-server-use-visible-text-mode
-																#'languagetool-server-check-visible-text
-													 #'languagetool-server-check-region-around-point))
-				)
-		(when (and (not languagetool-server-correcting-p) (funcall check-change-function))
-				(setq languagetool-server-check-timer
-							(run-with-timer languagetool-server-check-delay nil (lambda() (funcall update-function)))
-							)
-				)
+		(when (and (not languagetool-server-correcting-p) (languagetool-server-text-changed-p))
+			(message "Add timer")
+			(setq languagetool-server-check-timer
+							(run-with-timer languagetool-server-check-delay nil #'languagetool-server-check-region))
+			(message "Added")
+			)
 		)
-	)
-
 
 (defun languagetool-server-send-request (&optional start end)
 	"Send a request to the server and parse the output given."
@@ -505,7 +507,7 @@ the relevant region or text has changed."
       (with-current-buffer checking-buffer
         (save-excursion
           ;; Smart overlay clearing for visible text mode
-          (if languagetool-server-use-visible-text-mode
+          (if languagetool-server-check-visible-text
               (languagetool-server-clear-region-overlays region-start)
             (languagetool-core-clear-buffer))
           (when languagetool-server-mode
@@ -526,8 +528,8 @@ the relevant region or text has changed."
 REGION-START is the start position of the region being checked.
 This function preserves overlays outside the checked region to avoid
 unnecessary clearing and redrawing when only part of the visible text changes."
-  (when languagetool-server-use-visible-text-mode
-    (let* ((region     (languagetool-server-get-visible-region))
+  (when languagetool-server-check-visible-text
+    (let* ((region     (languagetool-server-get-region))
            (region-end (cdr region)))
       ;; Only clear overlays within the current visible region
       (dolist (ov (overlays-in region-start region-end))

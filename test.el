@@ -45,10 +45,10 @@
   (languagetool-server-port 8081)
   (languagetool-hint-idle-delay 0.5)
   (languagetool-server-check-delay 1.5)
-  (languagetool-server-lines-before 10)
-  (languagetool-server-lines-after 10)
+  (languagetool-server-lines-before 2)
+  (languagetool-server-lines-after 2)
   (languagetool-correction-keys (string-to-vector "auienrstdoygov123456789"))
-	(languagetool-server-use-visible-text-mode t)
+	(customize-set-variable 'languagetool-server-check-visible-text t)
   )
 
 (add-to-list 'languagetool-core-correct-predicates #'languagetool-ignore-time-format-p)
@@ -259,7 +259,7 @@
 
 (ert-deftest languagetool-test-visible-region-detection ()
   "Test visible region detection at different window positions."
-  (skip-unless (fboundp 'languagetool-server-get-visible-region))
+  ;; (skip-unless (fboundp 'languagetool-server-get-region))
   (with-temp-buffer
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\n")
     (goto-char (point-min))
@@ -269,7 +269,7 @@
               ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
 
       ;; Test basic visible region detection
-      (let ((region (languagetool-server-get-visible-region)))
+      (let ((region (languagetool-server-get-region)))
         (should (consp region))
         (should (>= (car region) (point-min)))
         (should (<= (cdr region) (point-max)))
@@ -280,23 +280,24 @@
         (let ((text (languagetool-server-get-visible-text)))
           (should (stringp text))
           (should (> (length text) 0))))
+			)
+    ;; Test at different positions with mocked different regions
+    (cl-letf (((symbol-function 'window-start) (lambda (&optional _) 10))
+              ((symbol-function 'window-end) (lambda (&optional _ &rest _) 50)))
+      (let ((region-middle (languagetool-server-get-region)))
+        (cl-letf (((symbol-function 'window-start) (lambda (&optional _) 60))
+                  ((symbol-function 'window-end) (lambda (&optional _ &rest _) (point-max))))
+          (let ((region-end (languagetool-server-get-region)))
+            ;; Regions should be different when at different positions
+            (should-not (equal region-middle region-end))))))
 
-      ;; Test at different positions with mocked different regions
-      (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 10))
-                ((symbol-function 'window-end) (lambda (&optional window &rest args) 50)))
-        (let ((region-middle (languagetool-server-get-visible-region)))
-          (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 60))
-                    ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
-            (let ((region-end (languagetool-server-get-visible-region)))
-              ;; Regions should be different when at different positions
-              (should-not (equal region-middle region-end)))))))))
+		)
+	)
 
 (ert-deftest languagetool-test-visible-text-change-detection ()
   "Test change detection for visible text content."
-  (skip-unless (fboundp 'languagetool-server-visible-text-changed-p))
   (with-temp-buffer
     ;; Initialize buffer-local variables
-    (setq-local languagetool-server-use-visible-text-mode t)
     (setq-local languagetool-server-visible-text-cache nil)
     (setq-local languagetool-server-visible-region-cache nil)
 
@@ -307,44 +308,50 @@
               ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
 
       ;; First check should detect change (cache is empty)
-      (should (languagetool-server-visible-text-changed-p))
+      (should (languagetool-server-text-changed-p))
 
       ;; Second check should not detect change (cache is populated)
-      (should-not (languagetool-server-visible-text-changed-p))
+      (should-not (languagetool-server-text-changed-p))
 
       ;; Modify buffer content
       (goto-char (point-max))
       (insert "New line added\n")
 
       ;; Should detect change after content modification
-      (should (languagetool-server-visible-text-changed-p))
+      (should (languagetool-server-text-changed-p))
 
       ;; Should not detect change again
-      (should-not (languagetool-server-visible-text-changed-p)))))
+      (should-not (languagetool-server-text-changed-p)))))
 
 (ert-deftest languagetool-test-visible-text-mode-switching ()
   "Test switching between line-based and visible text modes."
   (with-temp-buffer
     (insert "Test content for mode switching\nSecond line\nThird line\n")
 
-    ;; Test line-based mode (default)
-    (setq-local languagetool-server-use-visible-text-mode nil)
-    (should-not languagetool-server-use-visible-text-mode)
+		(customize-set-variable 'languagetool-server-check-visible-text nil)
+    (should-not languagetool-server-check-visible-text)
 
-    ;; Change detection should return nil in line-based mode
-    ;; (should-not (languagetool-server-visible-text-changed-p))
+		(customize-set-variable 'languagetool-server-check-visible-text t)
+    (should languagetool-server-check-visible-text)
 
-    ;; Test visible text mode
-    ;; (setq-local languagetool-server-use-visible-text-mode t)
-    ;; (setq-local languagetool-server-visible-text-cache nil)
-    ;; (setq-local languagetool-server-visible-region-cache nil)
-    ;; (should languagetool-server-use-visible-text-mode)
-		;; (message "hum")
-    ;; Mock window functions for batch mode
-    ;; (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
-    ;;           ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
-    ;;   ;; Change detection should work in visible text mode
-    ;;   (should (languagetool-server-visible-text-changed-p)))
+		;; Mock window functions for batch mode
+		(cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (&optional _) 5))
+              ((symbol-function 'languagetool-server-window-end) (lambda (&optional _ &rest _) 15)))
+			(should-not languagetool-server-text-cache)
+			(should (equal (languagetool-server-get-text) " content f"))
+			(should (languagetool-server-text-changed-p))
+			(should-not (languagetool-server-text-changed-p))
+			)
+
+    (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (&optional _) 1))
+              ((symbol-function 'languagetool-server-window-end) (lambda (&optional _ &rest _) 10)))
+      ;; Change detection should work in visible text mode
+			(should languagetool-server-check-visible-text)
+			(should (equal (languagetool-server-window-end) 10))
+			(should (equal (languagetool-server-get-region) '(1 . 10)))
+			(should-not (equal (languagetool-server-get-text) "Second line\nThird line\n"))
+      (should (languagetool-server-text-changed-p))
+			)
 		)
 	)
 
@@ -352,7 +359,7 @@
   "Test overlay management with changing visible regions."
   (skip-unless (fboundp 'languagetool-server-clear-region-overlays))
   (with-temp-buffer
-    (setq-local languagetool-server-use-visible-text-mode t)
+		(customize-set-variable 'languagetool-server-check-visible-text t)
     (insert "Text with potential issues\nSecond line with content\nThird line\n")
 
     ;; Create some mock overlays
@@ -381,27 +388,5 @@
         (delete-overlay ov1)
         (delete-overlay ov2)
         (delete-overlay ov3)))))
-
-(ert-deftest languagetool-test-mode-activation-deactivation ()
-  "Test server mode activation and deactivation with visible text mode."
-  (with-temp-buffer
-    (insert "Test content for mode activation\n")
-
-    ;; Test variables are properly initialized
-    (should (boundp 'languagetool-server-visible-text-cache))
-    (should (boundp 'languagetool-server-visible-region-cache))
-    (should (boundp 'languagetool-server-visible-text-timer))
-
-    ;; Test cache clearing
-    (setq-local languagetool-server-visible-text-cache "test-cache")
-    (setq-local languagetool-server-visible-region-cache '(1 . 100))
-
-    ;; Simulate mode deactivation cleanup
-    (setq-local languagetool-server-visible-text-cache nil)
-    (setq-local languagetool-server-visible-region-cache nil)
-
-    ;; Verify cleanup
-    (should-not languagetool-server-visible-text-cache)
-    (should-not languagetool-server-visible-region-cache)))
 
 ;; test.el ends here
