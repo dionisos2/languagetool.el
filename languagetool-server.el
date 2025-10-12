@@ -391,9 +391,7 @@ used in the POST request made to the LanguageTool server."
 			(setq rules (string-join (append languagetool-disabled-rules (languagetool-get-rules-for-current-buffer)) ","))
 			(unless (string= rules "")
 				(push (list "disabledRules" rules) arguments)))
-
-		;; Add the buffer contents
-		(push (list "text" (buffer-substring-no-properties region-start region-end)) arguments)
+		(push (list "text" (url-hexify-string (buffer-substring-no-properties region-start region-end))) arguments)
 		)
 	)
 
@@ -497,16 +495,18 @@ the relevant region or text has changed."
 (defun languagetool-server-send-request (&optional start end)
 	"Send a request to the server and parse the output given."
 	;; (message "Send request to languagetool")
-	(let* ((region-start (or start (point-min)))
+	(let* (
+				 (region-start (or start (point-min)))
 				 (region-end (or end (point-max)))
 				 (url-request-method "POST")
-				 (url-request-data (url-build-query-string (languagetool-server-parse-request region-start region-end))))
+				 (url-request-data (url-build-query-string (languagetool-server-parse-request region-start region-end)))
+				 (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded")))
+				 )
 		(url-retrieve
 		 (url-encode-url(format "%s:%d/v2/check" languagetool-server-url languagetool-server-port))
 		 #'languagetool-server-highlight-matches
 		 (list (current-buffer) region-start)
 		 t)))
-
 
 (defun languagetool-server-highlight-matches (_status checking-buffer region-start)
   "Highlight LanguageTool Server issues in CHECKING-BUFFER for region starting at REGION-START."

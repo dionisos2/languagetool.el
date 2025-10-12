@@ -94,7 +94,11 @@
           (languagetool-disabled-rules nil))
       (let ((alist (languagetool-server-parse-request 1 10)))
         (should (member '("language" "fr") alist))
-        (should (member `("text" ,(buffer-substring-no-properties 1 10)) alist))))))
+        (should (member '("text" "Ceci%20est%20") alist))
+				)
+			)
+		)
+	)
 
 (defun languagetool-test-callback (_status orig-buffer region-start)
   "Callback de test pour url-retrieve. Affiche la réponse JSON brute."
