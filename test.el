@@ -36,7 +36,7 @@
          ("C-c s" . languagetool-correct-at-point)
          ("C-c C-s" . languagetool-correct-buffer-forward)
          ("C-<f10>" . languagetool-server-mode)
-         ("<f10>" . languagetool-server-check-region-around-point)
+         ("<f10>" . languagetool-server-check-region)
          )
   :custom
   (languagetool-correction-language "fr")
