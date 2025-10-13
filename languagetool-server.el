@@ -499,19 +499,19 @@ variables. Updates the cache if content has changed."
 		)
 	)
 
-(defun languagetool-server-check-region (buffer)
+(defun languagetool-server-check-region (&optional buffer)
 	"Check the currently visible text region for grammar issues."
-	;; (interactive)
-	(with-current-buffer buffer
+	(interactive)
+	(with-current-buffer (or buffer (current-buffer))
 		(when languagetool-server-mode
-			(let* ((region (languagetool-server-get-region buffer))
+			(let* ((region (languagetool-server-get-region (current-buffer)))
 						 (start (car region))
 						 (end (cdr region)))
 				(when (and start end)
-					(languagetool-server-send-request buffer start end)
+					(languagetool-server-send-request (current-buffer) start end)
 					)
 				)
-			(languagetool-server-update-cache buffer)
+			(languagetool-server-update-cache (current-buffer))
 			)
 		)
 	)
