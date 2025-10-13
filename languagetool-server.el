@@ -574,7 +574,8 @@ the relevant region or text has changed."
 					(save-excursion
 						;; Smart overlay clearing for visible text mode
 						(if languagetool-server-check-visible-text
-								(languagetool-server-clear-region-overlays checking-buffer region-start)
+								;; (languagetool-server-clear-region-overlays checking-buffer region-start)
+								(languagetool-core-clear-buffer)
 							(languagetool-core-clear-buffer))
 						(when languagetool-server-mode
 							(let ((corrections (alist-get 'matches json-parsed)))
