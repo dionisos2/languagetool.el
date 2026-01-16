@@ -112,6 +112,12 @@ content hasn't actually changed.")
 Used in visible text mode to track when the visible region has changed
 due to scrolling or window resizing.")
 
+(defvar-local languagetool-server--check-closure nil
+	"Buffer-local closure for the should-check hooks.
+
+Each buffer gets its own closure that captures its buffer reference,
+allowing proper cleanup when the mode is disabled.")
+
 (defun languagetool-server-window-start(buffer)
 	"Alias to mock of `window-start`."
 	(with-current-buffer buffer
@@ -132,22 +138,28 @@ due to scrolling or window resizing.")
 		)
 	)
 
-(defun languagetool-server-create-should-check-closure(&rest _args)
-	"Return closure to run languagetool-server-should-check on current buffer."
-	(let ((buffer (current-buffer)))
-		(defun languagetool-server-should-check-current-buffer (&rest _args)
-			(when (buffer-live-p buffer)
-				(with-current-buffer buffer
-					(languagetool-server-should-check))))))
+(defun languagetool-server-create-should-check-closure ()
+	"Create and return a closure to run languagetool-server-should-check.
 
-(defun languagetool-server-clear()
+The closure is stored in the buffer-local variable
+`languagetool-server--check-closure' so it can be properly removed
+from hooks later. Each buffer gets its own unique closure."
+	(let ((buffer (current-buffer)))
+		(setq languagetool-server--check-closure
+					(lambda (&rest _args)
+						(when (buffer-live-p buffer)
+							(with-current-buffer buffer
+								(languagetool-server-should-check)))))
+		languagetool-server--check-closure))
+
+(defun languagetool-server-clear ()
 	"Clean hooks, timers, caches."
-  ;; Clean up ALL hooks and timers first to prevent conflicts
-  (remove-hook 'after-change-functions (languagetool-server-create-should-check-closure) t)
-  ;; (remove-hook 'post-command-hook (languagetool-server-create-should-check-closure) t)
-  (remove-hook 'after-change-functions (languagetool-server-create-should-check-closure) t)
-  (remove-hook 'window-scroll-functions (languagetool-server-create-should-check-closure) t)
-  (remove-hook 'window-size-change-functions (languagetool-server-create-should-check-closure) t)
+	;; Clean up hooks using the stored closure (not a new one)
+	(when languagetool-server--check-closure
+		(remove-hook 'after-change-functions languagetool-server--check-closure t)
+		(remove-hook 'window-scroll-functions languagetool-server--check-closure t)
+		(remove-hook 'window-size-change-functions languagetool-server--check-closure t)
+		(setq languagetool-server--check-closure nil))
 
   ;; Cancel any existing timers
   (when (timerp languagetool-server-check-timer)

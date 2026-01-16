@@ -392,18 +392,42 @@
 This test reproduces the bug where calling org-todo would delete text
 because the closure tried to access a killed buffer, causing an error
 that interrupted the operation."
-  (let ((test-buffer (generate-new-buffer "*test-closure*")))
+  (let ((test-buffer (generate-new-buffer "*test-closure*"))
+        closure)
     ;; Create the closure capturing test-buffer
     (with-current-buffer test-buffer
-      (languagetool-server-create-should-check-closure))
+      (setq closure (languagetool-server-create-should-check-closure)))
     ;; Kill the buffer
     (kill-buffer test-buffer)
     ;; The closure should NOT error when called with a dead buffer
-    ;; Without the fix, this would signal: (error "Selecting deleted buffer")
+    ;; Without the buffer-live-p check, this would signal: (error "Selecting deleted buffer")
     (should-not (condition-case err
                     (progn
-                      (languagetool-server-should-check-current-buffer)
+                      (funcall closure)
                       nil)  ;; No error, return nil
                   (error err)))))  ;; Error occurred, return the error
+
+(ert-deftest languagetool-test-closure-is-buffer-local ()
+  "Test that each buffer gets its own unique closure.
+This verifies the fix for the defun-in-closure bug where all buffers
+shared the same global function."
+  (let ((buffer-a (generate-new-buffer "*test-closure-a*"))
+        (buffer-b (generate-new-buffer "*test-closure-b*"))
+        closure-a closure-b)
+    (unwind-protect
+        (progn
+          ;; Create closures for both buffers
+          (with-current-buffer buffer-a
+            (setq closure-a (languagetool-server-create-should-check-closure)))
+          (with-current-buffer buffer-b
+            (setq closure-b (languagetool-server-create-should-check-closure)))
+          ;; Closures should be different objects
+          (should-not (eq closure-a closure-b))
+          ;; Each buffer should have its own closure stored
+          (should (eq closure-a (buffer-local-value 'languagetool-server--check-closure buffer-a)))
+          (should (eq closure-b (buffer-local-value 'languagetool-server--check-closure buffer-b))))
+      ;; Cleanup
+      (kill-buffer buffer-a)
+      (kill-buffer buffer-b))))
 
 ;; test.el ends here
