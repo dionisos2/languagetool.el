@@ -136,12 +136,9 @@ due to scrolling or window resizing.")
 	"Return closure to run languagetool-server-should-check on current buffer."
 	(let ((buffer (current-buffer)))
 		(defun languagetool-server-should-check-current-buffer (&rest _args)
-			(with-current-buffer buffer
-				(languagetool-server-should-check)
-				)
-			)
-		)
-	)
+			(when (buffer-live-p buffer)
+				(with-current-buffer buffer
+					(languagetool-server-should-check))))))
 
 (defun languagetool-server-clear()
 	"Clean hooks, timers, caches."

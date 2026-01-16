@@ -387,4 +387,23 @@
           (delete-overlay ov2)
           (delete-overlay ov3))))))
 
+(ert-deftest languagetool-test-closure-with-killed-buffer ()
+  "Test that the should-check closure handles killed buffers gracefully.
+This test reproduces the bug where calling org-todo would delete text
+because the closure tried to access a killed buffer, causing an error
+that interrupted the operation."
+  (let ((test-buffer (generate-new-buffer "*test-closure*")))
+    ;; Create the closure capturing test-buffer
+    (with-current-buffer test-buffer
+      (languagetool-server-create-should-check-closure))
+    ;; Kill the buffer
+    (kill-buffer test-buffer)
+    ;; The closure should NOT error when called with a dead buffer
+    ;; Without the fix, this would signal: (error "Selecting deleted buffer")
+    (should-not (condition-case err
+                    (progn
+                      (languagetool-server-should-check-current-buffer)
+                      nil)  ;; No error, return nil
+                  (error err)))))  ;; Error occurred, return the error
+
 ;; test.el ends here
