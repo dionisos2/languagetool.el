@@ -561,44 +561,39 @@ the relevant region or text has changed."
 
 (defun languagetool-server-highlight-matches (_status checking-buffer region-start last-request)
   "Highlight LanguageTool Server issues in CHECKING-BUFFER for region starting at REGION-START."
-	(when (equal last-request (buffer-local-value 'languagetool-server-last-request checking-buffer))
-		(message (concat "languagetool-server-highlight-matches: " (buffer-name checking-buffer)))
-		(when (/= (symbol-value 'url-http-response-status) 200)
-			(error "LanguageTool Server closed"))
-		(unless languagetool-server-correcting-p
-			(set-buffer-multibyte t)
-			(goto-char (point-max))
-			(backward-sexp)
-			(let ((json-parsed (json-read)))
-				(with-current-buffer checking-buffer
-					(save-excursion
-						;; Smart overlay clearing for visible text mode
-						(if languagetool-server-check-visible-text
-								;; (languagetool-server-clear-region-overlays checking-buffer region-start)
-								(languagetool-core-clear-buffer)
-							(languagetool-core-clear-buffer))
-						(when languagetool-server-mode
-							(let ((corrections (alist-get 'matches json-parsed)))
-								(dotimes (index (length corrections))
-									(let* ((correction (aref corrections index))
-												 (offset (alist-get 'offset correction))
-												 (size   (alist-get 'length correction))
-												 (start  (+ region-start offset))
-												 (end    (+ region-start offset size))
-												 (word   (buffer-substring-no-properties start end)))
-										(unless (languagetool-core-correct-p word)
-											(languagetool-issue-create-overlay start end correction)
-											)
-										)
-									)
-								)
-							)
-						)
-					)
-				)
-			)
-		)
-	)
+  (when (equal last-request (buffer-local-value 'languagetool-server-last-request checking-buffer))
+    (message (concat "languagetool-server-highlight-matches: " (buffer-name checking-buffer)))
+    (when (/= (symbol-value 'url-http-response-status) 200)
+      (error "LanguageTool Server closed"))
+    (unless languagetool-server-correcting-p
+      (set-buffer-multibyte t)
+      (goto-char (point-max))
+      (backward-sexp)
+      (let ((json-parsed (json-read)))
+        (with-current-buffer checking-buffer
+          (save-excursion
+            ;; Safety check: verify buffer is still valid
+            (when (buffer-live-p checking-buffer)
+              ;; Smart overlay clearing for visible text mode
+              (if languagetool-server-check-visible-text
+                  (languagetool-core-clear-buffer)
+                (languagetool-core-clear-buffer))
+              (when languagetool-server-mode
+                (let ((corrections (alist-get 'matches json-parsed))
+                      (buffer-max (point-max)))
+                  (dotimes (index (length corrections))
+                    (let* ((correction (aref corrections index))
+                           (offset (alist-get 'offset correction))
+                           (size   (alist-get 'length correction))
+                           (start  (+ region-start offset))
+                           (end    (+ region-start offset size)))
+                      ;; Safety check: verify positions are valid
+                      (when (and (>= start (point-min))
+                                 (<= end buffer-max)
+                                 (< start end))
+                        (let ((word (buffer-substring-no-properties start end)))
+                          (unless (languagetool-core-correct-p word)
+                            (languagetool-issue-create-overlay start end correction)))))))))))))))
 
 (defun languagetool-server-clear-region-overlays (buffer region-start)
   "Clear LanguageTool overlays only in the region being checked.
