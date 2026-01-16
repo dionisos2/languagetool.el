@@ -59,18 +59,22 @@
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\n")
     (goto-char (point-min))
     (forward-line 3) ;; Cursor sur Line 4
-    (let* ((region (languagetool-server-region-around-point 2 2))
-           (text (buffer-substring-no-properties (car region) (cdr region))))
-      (should (string= text "Line 2\nLine 3\nLine 4\nLine 5\nLine 6")))))
+    (let ((languagetool-server-lines-before 2)
+          (languagetool-server-lines-after 2))
+      (let* ((region (languagetool-server-region-around-point (current-buffer)))
+             (text (buffer-substring-no-properties (car region) (cdr region))))
+        (should (string= text "Line 2\nLine 3\nLine 4\nLine 5\nLine 6"))))))
 
 (ert-deftest languagetool-test-region-around-point-beginning ()
   "Test extraction around the points at the beginning of the buffer."
   (with-temp-buffer
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n")
     (goto-char (point-min)) ;; Cursor sur Line 1
-    (let* ((region (languagetool-server-region-around-point 2 2))
-           (text (buffer-substring-no-properties (car region) (cdr region))))
-      (should (string= text "Line 1\nLine 2\nLine 3")))))
+    (let ((languagetool-server-lines-before 2)
+          (languagetool-server-lines-after 2))
+      (let* ((region (languagetool-server-region-around-point (current-buffer)))
+             (text (buffer-substring-no-properties (car region) (cdr region))))
+        (should (string= text "Line 1\nLine 2\nLine 3"))))))
 
 (ert-deftest languagetool-test-region-around-point-end ()
   "Test extraction around the points at the end of the buffer."
@@ -78,9 +82,11 @@
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n")
     (goto-char (point-max))
     (forward-line -1) ;; Cursor sur Line 5
-    (let* ((region (languagetool-server-region-around-point 2 2))
-           (text (buffer-substring-no-properties (car region) (cdr region))))
-      (should (string= text "Line 3\nLine 4\nLine 5\n")))))
+    (let ((languagetool-server-lines-before 2)
+          (languagetool-server-lines-after 2))
+      (let* ((region (languagetool-server-region-around-point (current-buffer)))
+             (text (buffer-substring-no-properties (car region) (cdr region))))
+        (should (string= text "Line 3\nLine 4\nLine 5\n"))))))
 
 (ert-deftest languagetool-server-parse-request-test ()
   "Test that languagetool-server-parse-request returns correct alist for region."
@@ -92,13 +98,9 @@
           (languagetool-username nil)
           (languagetool-suggestion-level nil)
           (languagetool-disabled-rules nil))
-      (let ((alist (languagetool-server-parse-request 1 10)))
+      (let ((alist (languagetool-server-parse-request (current-buffer) 1 10)))
         (should (member '("language" "fr") alist))
-        (should (member '("text" "Ceci%20est%20") alist))
-				)
-			)
-		)
-	)
+        (should (member '("text" "Ceci%20est%20") alist))))))
 
 (defun languagetool-test-callback (_status orig-buffer region-start)
   "Callback de test pour url-retrieve. Affiche la réponse JSON brute."
@@ -263,135 +265,126 @@
 
 (ert-deftest languagetool-test-visible-region-detection ()
   "Test visible region detection at different window positions."
-  ;; (skip-unless (fboundp 'languagetool-server-get-region))
   (with-temp-buffer
     (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\n")
     (goto-char (point-min))
+    (let ((buf (current-buffer)))
+      ;; Mock window functions for batch mode compatibility
+      (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 1))
+                ((symbol-function 'languagetool-server-window-end) (lambda (buffer) (with-current-buffer buffer (point-max)))))
 
-    ;; Mock window functions for batch mode compatibility
-    (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
-              ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
+        ;; Test basic visible region detection
+        (let ((languagetool-server-check-visible-text t))
+          (let ((region (languagetool-server-get-region buf)))
+            (should (consp region))
+            (should (>= (car region) (point-min)))
+            (should (<= (cdr region) (point-max)))
+            (should (< (car region) (cdr region)))))
 
-      ;; Test basic visible region detection
-      (let ((region (languagetool-server-get-region)))
-        (should (consp region))
-        (should (>= (car region) (point-min)))
-        (should (<= (cdr region) (point-max)))
-        (should (< (car region) (cdr region))))
+        ;; Test visible text extraction
+        (let ((languagetool-server-check-visible-text t))
+          (let ((text (languagetool-server-get-text buf)))
+            (should (stringp text))
+            (should (> (length text) 0)))))
 
-      ;; Test visible text extraction
-      (when (fboundp 'languagetool-server-get-visible-text)
-        (let ((text (languagetool-server-get-visible-text)))
-          (should (stringp text))
-          (should (> (length text) 0))))
-			)
-    ;; Test at different positions with mocked different regions
-    (cl-letf (((symbol-function 'window-start) (lambda (&optional _) 10))
-              ((symbol-function 'window-end) (lambda (&optional _ &rest _) 50)))
-      (let ((region-middle (languagetool-server-get-region)))
-        (cl-letf (((symbol-function 'window-start) (lambda (&optional _) 60))
-                  ((symbol-function 'window-end) (lambda (&optional _ &rest _) (point-max))))
-          (let ((region-end (languagetool-server-get-region)))
-            ;; Regions should be different when at different positions
-            (should-not (equal region-middle region-end))))))
-
-		)
-	)
+      ;; Test at different positions with mocked different regions
+      (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 10))
+                ((symbol-function 'languagetool-server-window-end) (lambda (buffer) 50)))
+        (let ((languagetool-server-check-visible-text t))
+          (let ((region-middle (languagetool-server-get-region buf)))
+            (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 60))
+                      ((symbol-function 'languagetool-server-window-end) (lambda (buffer) (with-current-buffer buffer (point-max)))))
+              (let ((region-end (languagetool-server-get-region buf)))
+                ;; Regions should be different when at different positions
+                (should-not (equal region-middle region-end))))))))))
 
 (ert-deftest languagetool-test-visible-text-change-detection ()
   "Test change detection for visible text content."
   (with-temp-buffer
     ;; Initialize buffer-local variables
-    (setq-local languagetool-server-visible-text-cache nil)
-    (setq-local languagetool-server-visible-region-cache nil)
+    (setq-local languagetool-server-text-cache nil)
+    (setq-local languagetool-server-region-cache nil)
 
     (insert "Initial text content\nSecond line\nThird line\n")
+    (let ((buf (current-buffer)))
+      ;; Mock window functions for consistent behavior in batch mode
+      (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 1))
+                ((symbol-function 'languagetool-server-window-end) (lambda (buffer) (with-current-buffer buffer (point-max)))))
 
-    ;; Mock window functions for consistent behavior in batch mode
-    (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
-              ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
+        (should (languagetool-server-text-changed-p buf))
+        (should (languagetool-server-text-changed-p buf))
+        (languagetool-server-update-cache buf)
+        (should-not (languagetool-server-text-changed-p buf))
 
-      (should (languagetool-server-text-changed-p))
-      (should (languagetool-server-text-changed-p))
-			(languagetool-server-update-cache)
-			(should-not (languagetool-server-text-changed-p))
+        ;; Modify buffer content
+        (goto-char (point-max))
+        (insert "New line added\n")
 
-      ;; Modify buffer content
-      (goto-char (point-max))
-      (insert "New line added\n")
-
-      ;; Should detect change after content modification
-      (should (languagetool-server-text-changed-p))
-			)
-		)
-	)
+        ;; Should detect change after content modification
+        (should (languagetool-server-text-changed-p buf))))))
 
 (ert-deftest languagetool-test-visible-text-mode-switching ()
   "Test switching between line-based and visible text modes."
   (with-temp-buffer
     (insert "Test content for mode switching\nSecond line\nThird line\n")
+    (let ((buf (current-buffer)))
+      (customize-set-variable 'languagetool-server-check-visible-text nil)
+      (should-not languagetool-server-check-visible-text)
 
-		(customize-set-variable 'languagetool-server-check-visible-text nil)
-    (should-not languagetool-server-check-visible-text)
+      (customize-set-variable 'languagetool-server-check-visible-text t)
+      (should languagetool-server-check-visible-text)
 
-		(customize-set-variable 'languagetool-server-check-visible-text t)
-    (should languagetool-server-check-visible-text)
+      ;; Mock window functions for batch mode
+      (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 5))
+                ((symbol-function 'languagetool-server-window-end) (lambda (buffer) 15)))
+        (should-not languagetool-server-text-cache)
+        (should (equal (languagetool-server-get-text buf) " content f"))
+        (should (languagetool-server-text-changed-p buf))
+        (should (languagetool-server-text-changed-p buf))
+        (languagetool-server-update-cache buf)
+        (should-not (languagetool-server-text-changed-p buf)))
 
-		;; Mock window functions for batch mode
-		(cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (&optional _) 5))
-              ((symbol-function 'languagetool-server-window-end) (lambda (&optional _ &rest _) 15)))
-			(should-not languagetool-server-text-cache)
-			(should (equal (languagetool-server-get-text) " content f"))
-			(should (languagetool-server-text-changed-p))
-			(should (languagetool-server-text-changed-p))
-			(languagetool-server-update-cache)
-			(should-not (languagetool-server-text-changed-p))
-			)
-
-    (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (&optional _) 1))
-              ((symbol-function 'languagetool-server-window-end) (lambda (&optional _ &rest _) 10)))
-      ;; Change detection should work in visible text mode
-			(should languagetool-server-check-visible-text)
-			(should (equal (languagetool-server-window-end) 10))
-			(should (equal (languagetool-server-get-region) '(1 . 10)))
-			(should-not (equal (languagetool-server-get-text) "Second line\nThird line\n"))
-      (should (languagetool-server-text-changed-p))
-			)
-		)
-	)
+      (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 1))
+                ((symbol-function 'languagetool-server-window-end) (lambda (buffer) 10)))
+        ;; Change detection should work in visible text mode
+        (should languagetool-server-check-visible-text)
+        (should (equal (languagetool-server-window-end buf) 10))
+        (should (equal (languagetool-server-get-region buf) '(1 . 10)))
+        (should-not (equal (languagetool-server-get-text buf) "Second line\nThird line\n"))
+        (should (languagetool-server-text-changed-p buf))))))
 
 (ert-deftest languagetool-test-overlay-management-visible-mode ()
   "Test overlay management with changing visible regions."
   (skip-unless (fboundp 'languagetool-server-clear-region-overlays))
   (with-temp-buffer
-		(customize-set-variable 'languagetool-server-check-visible-text t)
+    (customize-set-variable 'languagetool-server-check-visible-text t)
     (insert "Text with potential issues\nSecond line with content\nThird line\n")
+    (let ((buf (current-buffer)))
+      ;; Create some mock overlays
+      (let ((ov1 (make-overlay 1 10))
+            (ov2 (make-overlay 20 30))
+            (ov3 (make-overlay 40 50)))
 
-    ;; Create some mock overlays
-    (let ((ov1 (make-overlay 1 10))
-          (ov2 (make-overlay 20 30))
-          (ov3 (make-overlay 40 50)))
+        ;; Mark overlays as LanguageTool overlays
+        (overlay-put ov1 'languagetool-message "Test message 1")
+        (overlay-put ov2 'languagetool-message "Test message 2")
+        (overlay-put ov3 'languagetool-message "Test message 3")
 
-      ;; Mark overlays as LanguageTool overlays
-      (overlay-put ov1 'languagetool-message "Test message 1")
-      (overlay-put ov2 'languagetool-message "Test message 2")
-      (overlay-put ov3 'languagetool-message "Test message 3")
+        ;; Mock window functions for batch mode
+        (cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 1))
+                  ((symbol-function 'languagetool-server-window-end) (lambda (buffer) (with-current-buffer buffer (point-max)))))
 
-      ;; Mock window functions for batch mode
-      (cl-letf (((symbol-function 'window-start) (lambda (&optional window) 1))
-                ((symbol-function 'window-end) (lambda (&optional window &rest args) (point-max))))
+          ;; Test selective overlay clearing
+          (languagetool-server-clear-region-overlays buf 1)
 
-        ;; Test selective overlay clearing
-        (languagetool-server-clear-region-overlays 1)
+          ;; Verify overlays exist (they should since we're testing the function exists)
+          (should (overlayp ov1))
+          (should (overlayp ov2))
+          (should (overlayp ov3))
 
-        ;; Verify overlays exist (they should since we're testing the function exists)
-        (should (overlayp ov1))
-        (should (overlayp ov2))
-        (should (overlayp ov3))
-
-        ;; Clean up overlays
-        (delete-overlay ov1)
-        (delete-overlay ov2)
-        (delete-overlay ov3)))))
+          ;; Clean up overlays
+          (delete-overlay ov1)
+          (delete-overlay ov2)
+          (delete-overlay ov3))))))
 
 ;; test.el ends here
