@@ -53,14 +53,11 @@
 (defun languagetool-set-language (lang)
 	"Set LanguageTool correction language to LANG."
 	(interactive
-	 (list (read-string "LanguageTool new language: "
-											(cdr (assoc languagetool-correction-language languagetool-core-languages))
-											languagetool-correction-language-history
-											(let (languages-choices)
-												(dolist (language
-																 languagetool-core-languages
-																 (reverse languages-choices))
-													(push (cdr language) languages-choices))))))
+	 (list (completing-read "LanguageTool language: "
+													(mapcar #'cdr languagetool-core-languages)
+													nil nil nil
+													'languagetool-correction-language-history
+													(cdr (assoc languagetool-correction-language languagetool-core-languages)))))
 	(setq languagetool-correction-language (or (car (rassoc lang languagetool-core-languages))
 																						 lang)))
 
