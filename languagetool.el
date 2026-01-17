@@ -54,15 +54,15 @@
 	"Set LanguageTool correction language to LANG."
 	(interactive
 	 (list (read-string "LanguageTool new language: "
-					(cdr (assoc languagetool-correction-language languagetool-core-languages))
-					languagetool-correction-language-history
-					(let (languages-choices)
-			(dolist (language
-				 languagetool-core-languages
-				 (reverse languages-choices))
-				(push (cdr language) languages-choices))))))
+											(cdr (assoc languagetool-correction-language languagetool-core-languages))
+											languagetool-correction-language-history
+											(let (languages-choices)
+												(dolist (language
+																 languagetool-core-languages
+																 (reverse languages-choices))
+													(push (cdr language) languages-choices))))))
 	(setq languagetool-correction-language (or (car (rassoc lang languagetool-core-languages))
-							 lang)))
+																						 lang)))
 
 ;;;###autoload
 (defun languagetool-clear-suggestions ()
@@ -81,11 +81,11 @@ If you want to clear the suggestions turn off the server mode"))
 	"Correct the current buffer and highlight errors.
 
 If region is selected before calling this function, that would be
-the region passed as an argument. The region is delimited by
+the region passed as an argument.  The region is delimited by
 BEGIN and END.
 
 If `languagetool-server-mode' is active, send a request to the
-server and ends. The parameters BEGIN and END did not make any
+server and ends.  The parameters BEGIN and END did not make any
 difference, as in this mode, the whole buffer needs to be
 checked."
 	(interactive
@@ -93,7 +93,7 @@ checked."
 			 (list (region-beginning) (region-end))
 		 (list (point-min) (point-max))))
 	(if languagetool-server-mode
-			(languagetool-server-send-request)
+			(languagetool-server-send-request (current-buffer) (point-min) (point-max))
 		(languagetool-console-check begin end)))
 
 ;;;###autoload
@@ -110,8 +110,9 @@ checked."
 (defun languagetool-correct-buffer (&optional reverse)
 	"Correct all LanguageTool errors in the buffer.
 
-If REVERSE is non-nil (default), corrections start from the last error and move backward.
-If REVERSE is nil, corrections start from the first error and move forward.
+If REVERSE is non-nil (default), corrections start from the last
+error and move backward.  If REVERSE is nil, corrections start from
+the first error and move forward.
 
 This function pops up a transient buffer for each correction.
 
@@ -121,17 +122,17 @@ If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p'
 		(setq languagetool-server-correcting-p t))
 	(condition-case err
 			(save-excursion
-	(let* ((overlays (overlays-in (point-min) (point-max)))
-				 (sorted (sort overlays
-					 (lambda (a b)
-						 (if reverse
-					 (< (overlay-start a) (overlay-start b))
-				 (> (overlay-start a) (overlay-start b)))))))
-		(dolist (ov sorted)
-			(when (and (overlay-get ov 'languagetool-message)
-					 (overlay-start ov))
-				(goto-char (overlay-start ov))
-				(languagetool-correction-at-point)))))
+				(let* ((overlays (overlays-in (point-min) (point-max)))
+							 (sorted (sort overlays
+														 (lambda (a b)
+															 (if reverse
+																	 (< (overlay-start a) (overlay-start b))
+																 (> (overlay-start a) (overlay-start b)))))))
+					(dolist (ov sorted)
+						(when (and (overlay-get ov 'languagetool-message)
+											 (overlay-start ov))
+							(goto-char (overlay-start ov))
+							(languagetool-correction-at-point)))))
 		((quit error)
 		 (when languagetool-server-mode
 			 (setq languagetool-server-correcting-p nil))
@@ -140,9 +141,10 @@ If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p'
 		(setq languagetool-server-correcting-p nil)))
 
 (defun languagetool-correct-buffer-forward ()
+	"Correct all LanguageTool errors in the buffer, starting from the first error."
 	(interactive)
-	(languagetool-correct-buffer t)
-	)
+	(languagetool-correct-buffer t))
+
 (provide 'languagetool)
 
 ;;; languagetool.el ends here

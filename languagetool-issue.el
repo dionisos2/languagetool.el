@@ -6,7 +6,6 @@
 ;; Keywords: grammar text docs tools convenience checker
 ;; URL: https://github.com/PillFall/Emacs-LanguageTool.el
 ;; Version: 1.3.0
-;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -80,13 +79,13 @@
 	'(("misspelling" . languagetool-issue-misspelling)
 		("grammar" . languagetool-issue-grammar)
 		("style" . languagetool-issue-style))
-	"Alist with issue type associated with it's face.
+	"Alist with issue type associated with its face.
 
 Each element is a cons cell with the form (ISSUE_TYPE . FACE_NAME)."
 	:group 'languagetool-issue
 	:type '(alist
-		:key-type (string :tag "Issue Type")
-		:value-type (face :tag "Face Name")))
+					:key-type (string :tag "Issue Type")
+					:value-type (face :tag "Face Name")))
 
 ;; Function definitions:
 
@@ -102,13 +101,13 @@ Create an overlay for correction in the region delimited by BEGIN
 and END, parsing CORRECTION as overlay properties."
 	(save-excursion
 		(let* ((ov (make-overlay begin end))
-		 (short-message (alist-get 'shortMessage correction))
-		 (message (alist-get 'message correction))
-		 (replacements (alist-get 'replacements correction))
-		 (rule (alist-get 'rule correction))
-		 (issue-type (alist-get 'issueType rule)))
+					 (short-message (alist-get 'shortMessage correction))
+					 (message (alist-get 'message correction))
+					 (replacements (alist-get 'replacements correction))
+					 (rule (alist-get 'rule correction))
+					 (issue-type (alist-get 'issueType rule)))
 			(when (string= short-message "")
-	(setq short-message message))
+				(setq short-message message))
 			(overlay-put ov 'languagetool-short-message short-message)
 			(overlay-put ov 'languagetool-message message)
 			(overlay-put ov 'languagetool-replacements replacements)

@@ -6,7 +6,6 @@
 ;; Keywords: grammar text docs tools convenience checker
 ;; URL: https://github.com/PillFall/Emacs-LanguageTool.el
 ;; Version: 1.3.0
-;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -94,8 +93,7 @@ More info at http://wiki.languagetool.org/command-line-options."
 	:type 'number)
 
 (defvar-local languagetool-server-last-request 0
-	"Count request so only the last one will highlight text."
-	)
+	"Count request so only the last one will highlight text.")
 
 (defvar-local languagetool-server-check-timer nil
 	"Hold idle time that send request to LanguageTool server.")
@@ -118,32 +116,26 @@ due to scrolling or window resizing.")
 Each buffer gets its own closure that captures its buffer reference,
 allowing proper cleanup when the mode is disabled.")
 
-(defun languagetool-server-window-start(buffer)
-	"Alias to mock of `window-start`."
+(defun languagetool-server-window-start (buffer)
+	"Return the window start position for BUFFER, or nil if not displayed."
 	(with-current-buffer buffer
 		(if (get-buffer-window buffer)
 				(max (point-min) (window-start (get-buffer-window buffer)))
-			nil
-			)
-		)
-	)
+			nil)))
 
-(defun languagetool-server-window-end(buffer)
-	"Alias to mock of `window-end`."
+(defun languagetool-server-window-end (buffer)
+	"Return the window end position for BUFFER, or nil if not displayed."
 	(with-current-buffer buffer
 		(if (get-buffer-window buffer)
 				(min (point-max) (window-end (get-buffer-window buffer)))
-			nil
-			)
-		)
-	)
+			nil)))
 
 (defun languagetool-server-create-should-check-closure ()
 	"Create and return a closure to run languagetool-server-should-check.
 
 The closure is stored in the buffer-local variable
 `languagetool-server--check-closure' so it can be properly removed
-from hooks later. Each buffer gets its own unique closure."
+from hooks later.  Each buffer gets its own unique closure."
 	(let ((buffer (current-buffer)))
 		(setq languagetool-server--check-closure
 					(lambda (&rest _args)
@@ -172,8 +164,7 @@ from hooks later. Each buffer gets its own unique closure."
 
 	;; Clear caches
 	(setq languagetool-server-text-cache nil)
-	(setq languagetool-server-region-cache nil)
-	)
+	(setq languagetool-server-region-cache nil))
 
 (defun languagetool-server-activate-check-visible-text ()
 	"Activate LanguageTool highlighting for all visible text."
@@ -184,8 +175,7 @@ from hooks later. Each buffer gets its own unique closure."
 	(let ((closure (languagetool-server-create-should-check-closure)))
 		(add-hook 'after-change-functions closure nil t)
 		(add-hook 'window-scroll-functions closure nil t)
-		(add-hook 'window-size-change-functions closure nil t))
-	)
+		(add-hook 'window-size-change-functions closure nil t)))
 
 (defun languagetool-server-desactivate-check-visible-text ()
 	"Desactivate LanguageTool highlighting for all visible text."
@@ -206,23 +196,18 @@ from hooks later. Each buffer gets its own unique closure."
 		(languagetool-server-mode-off)))
 
 (defun languagetool-server-check-visible-text--set (symbol value)
-	"Set languagetool-server-check-visible-text."
+	"Set SYMBOL to VALUE and update LanguageTool visible text checking mode."
 	(set-default symbol value)
-
-	(if languagetool-server-mode
-			(if value
-					(languagetool-server-activate-check-visible-text)
-				(languagetool-server-desactivate-check-visible-text)
-				)
-		)
-	)
+	(when languagetool-server-mode
+		(if value
+				(languagetool-server-activate-check-visible-text)
+			(languagetool-server-desactivate-check-visible-text))))
 
 (defcustom languagetool-server-check-visible-text nil
 	"If non-nil, activate LanguageTool highlighting for all visible text."
 	:group 'languagetool-server
 	:type 'boolean
-	:set #'languagetool-server-check-visible-text--set
-	)
+	:set #'languagetool-server-check-visible-text--set)
 
 (defvar languagetool-server-output-buffer-name "*LanguageTool Server Output*"
 	"LanguageTool Server output buffer for debugging.")
@@ -252,16 +237,15 @@ Don't use this function, use `languagetool-server-mode' instead."
 
 	(if languagetool-server-check-visible-text
 			(languagetool-server-activate-check-visible-text)
-		(languagetool-server-desactivate-check-visible-text)
-		)
+		(languagetool-server-desactivate-check-visible-text))
 	;; Initial check of visible text
 	(languagetool-server-should-check)
 
 	;; Init hint timer if not already running
 	(unless (timerp languagetool-core-hint-timer)
 		(setq languagetool-core-hint-timer
-		(run-with-idle-timer languagetool-hint-idle-delay t
-						 languagetool-hint-function))))
+					(run-with-idle-timer languagetool-hint-idle-delay t
+															 languagetool-hint-function))))
 
 (defun languagetool-server-mode-off ()
 	"Turn off LanguageTool Server mode.
@@ -272,8 +256,7 @@ Don't use this function, use `languagetool-server-mode' instead."
 
 	(languagetool-server-clear)
 	;; Delete all LanguageTool overlays
-	(languagetool-core-clear-buffer)
-	)
+	(languagetool-core-clear-buffer))
 
 
 
@@ -391,10 +374,11 @@ of seconds specified in `languagetool-server-max-timeout'."
 		(languagetool-server-should-check)))
 
 (defun languagetool-server-parse-request (buffer start end)
-	"Return a assoc-list with LanguageTool Server request arguments parsed.
+	"Return an assoc-list with LanguageTool Server request arguments parsed.
 
 Return the arguments as an assoc list of string which will be
-used in the POST request made to the LanguageTool server."
+used in the POST request made to the LanguageTool server.
+BUFFER is the buffer to check, START and END define the region."
 	(with-current-buffer buffer
 		(let ((region-start (or start (point-min)))
 					(region-end (or end (point-max)))
@@ -407,7 +391,7 @@ used in the POST request made to the LanguageTool server."
 			(when (stringp languagetool-mother-tongue)
 				(push (list "motherTongue" languagetool-mother-tongue) arguments))
 
-			;; Add LanguageTool Preamium features
+			;; Add LanguageTool Premium features
 			(when (stringp languagetool-api-key)
 				(push (list "apiKey" languagetool-api-key) arguments))
 
@@ -424,68 +408,51 @@ used in the POST request made to the LanguageTool server."
 				(setq rules (string-join (append languagetool-disabled-rules (languagetool-get-rules-for-current-buffer)) ","))
 				(unless (string= rules "")
 					(push (list "disabledRules" rules) arguments)))
-			(push (list "text" (url-hexify-string (buffer-substring-no-properties region-start region-end))) arguments)
-			)
-		)
-	)
+			(push (list "text" (url-hexify-string (buffer-substring-no-properties region-start region-end))) arguments))))
 
 (defun languagetool-server-region-around-point (buffer)
-	"Return cons cell (start . end) for region around point, using line offsets."
+	"Return cons cell (start . end) for region around point in BUFFER, using line offsets."
 	(with-current-buffer buffer
-		(let* (
-					 (start (save-excursion
+		(let* ((start (save-excursion
 										(forward-line (- languagetool-server-lines-before))
-									(line-beginning-position)))
+										(line-beginning-position)))
 					 (end (save-excursion
 									(forward-line languagetool-server-lines-after)
-									(line-end-position)))
-					 )
-			(cons start end)
-			)
-		)
-	)
+									(line-end-position))))
+			(cons start end))))
 
 (defun languagetool-server-get-region (buffer)
-	"Return cons cell (start . end) for the visible text region in WINDOW.
-Or for region around point.
-
-WINDOW defaults to the selected window. Uses `languagetool-server-window-start' and `languagetool-server-window-end'
-to determine the boundaries of text currently visible in the window."
+	"Return cons cell (start . end) for the visible text region in BUFFER.
+Or for region around point.  Uses `languagetool-server-window-start'
+and `languagetool-server-window-end' to determine the boundaries of
+text currently visible in the window."
 	(with-current-buffer buffer
 		(if languagetool-server-check-visible-text
 				(cons
 				 (funcall #'languagetool-server-window-start buffer)
-				 (funcall #'languagetool-server-window-end buffer)
-				 )
-			(languagetool-server-region-around-point buffer)
-			)
-		)
-	)
+				 (funcall #'languagetool-server-window-end buffer))
+			(languagetool-server-region-around-point buffer))))
 
 (defun languagetool-server-get-text (buffer)
-	"Return the text content currently visible in WINDOW.
-Or for region around point
-WINDOW defaults to the selected window. Returns the text between
-`languagetool-server-window-start' and `languagetool-server-window-end' as a string with properties removed."
+	"Return the text content currently visible in BUFFER.
+Or for region around point.  Returns the text between
+`languagetool-server-window-start' and `languagetool-server-window-end'
+as a string with properties removed."
 	(with-current-buffer buffer
 		(let* ((region (languagetool-server-get-region buffer))
 					 (start (car region))
 					 (end (cdr region)))
 			(if (and start end)
 					(buffer-substring-no-properties start end)
-				nil
-				)
-			)
-		)
-	)
+				nil))))
 
 
 (defun languagetool-server-text-changed-p (buffer)
-	"Return non-nil if the visible text content has changed since last check.
+	"Return non-nil if the visible text content in BUFFER has changed.
 
-WINDOW defaults to the selected window. Compares the current visible
-region and text content against the cached values in buffer-local
-variables. Updates the cache if content has changed."
+Compares the current visible region and text content against the
+cached values in buffer-local variables.  Updates the cache if
+content has changed."
 	(interactive)
 	(with-current-buffer buffer
 		(let ((current-region (languagetool-server-get-region buffer))
@@ -495,26 +462,18 @@ variables. Updates the cache if content has changed."
 			 (not (equal current-region languagetool-server-region-cache))
 			 ;; Always detect change if cache is empty
 			 (null languagetool-server-text-cache)
-			 (null languagetool-server-region-cache)
-			 )
-			)
-		)
-	)
+			 (null languagetool-server-region-cache)))))
 
 (defun languagetool-server-update-cache (buffer)
-	"Update cache with the current region of text."
-	;; (interactive)
+	"Update cache with the current region of text in BUFFER."
 	(with-current-buffer buffer
 		(let ((current-region (languagetool-server-get-region buffer))
 					(current-text (languagetool-server-get-text buffer)))
 			(setq languagetool-server-region-cache current-region)
-			(setq languagetool-server-text-cache current-text)
-			)
-		)
-	)
+			(setq languagetool-server-text-cache current-text))))
 
 (defun languagetool-server-check-region (&optional buffer)
-	"Check the currently visible text region for grammar issues."
+	"Check the currently visible text region for grammar issues in BUFFER."
 	(interactive)
 	(with-current-buffer (or buffer (current-buffer))
 		(when languagetool-server-mode
@@ -522,56 +481,43 @@ variables. Updates the cache if content has changed."
 						 (start (car region))
 						 (end (cdr region)))
 				(when (and start end)
-					(languagetool-server-send-request (current-buffer) start end)
-					)
-				)
-			(languagetool-server-update-cache (current-buffer))
-			)
-		)
-	)
+					(languagetool-server-send-request (current-buffer) start end)))
+			(languagetool-server-update-cache (current-buffer)))))
 
 (defun languagetool-server-should-check (&rest _args)
-	"Schedule a LanguageTool check if the buffer content or visible region has changed.
+	"Schedule a LanguageTool check if the buffer content has changed.
 
-This function unifies debouncing and cache-based change detection for both
-visible text mode and line-based mode. It cancels any existing timer, checks
-if a correction is already in progress, and only schedules a new check if
-the relevant region or text has changed."
+This function unifies debouncing and cache-based change detection for
+both visible text mode and line-based mode.  It cancels any existing
+timer, checks if a correction is in progress, and only schedules a
+new check if the relevant region or text has changed."
 	(let ((buffer (current-buffer)))
 		(when (timerp languagetool-server-check-timer)
 			(cancel-timer languagetool-server-check-timer)
-			(setq languagetool-server-check-timer nil)
-			)
+			(setq languagetool-server-check-timer nil))
 		(when (and
 					 (not languagetool-server-correcting-p)
 					 (languagetool-server-text-changed-p buffer)
-					 (get-buffer-window buffer)
-					 )
+					 (get-buffer-window buffer))
 			(cl-incf languagetool-server-last-request)
 			(setq languagetool-server-check-timer
-						(run-with-timer languagetool-server-check-delay nil #'languagetool-server-check-region buffer))
-			)
-		)
-	)
+						(run-with-timer languagetool-server-check-delay nil #'languagetool-server-check-region buffer)))))
 
 (defun languagetool-server-send-request (buffer start end)
-	"Send a request to the server and parse the output given."
+	"Send a request to the server for BUFFER and parse the output given.
+START and END define the region to check."
 	(with-current-buffer buffer
 		(message (concat "Send request to languagetool: " (buffer-name (current-buffer))))
-		(let* (
-					 (region-start (or start (point-min)))
+		(let* ((region-start (or start (point-min)))
 					 (region-end (or end (point-max)))
 					 (url-request-method "POST")
 					 (url-request-data (url-build-query-string (languagetool-server-parse-request buffer region-start region-end)))
-					 (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded")))
-					 )
+					 (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded"))))
 			(url-retrieve
-			 (url-encode-url(format "%s:%d/v2/check" languagetool-server-url languagetool-server-port))
+			 (url-encode-url (format "%s:%d/v2/check" languagetool-server-url languagetool-server-port))
 			 #'languagetool-server-highlight-matches
 			 (list buffer region-start languagetool-server-last-request)
-			 t))
-		)
-	)
+			 t))))
 
 (defun languagetool-server--parse-response ()
 	"Parse JSON response from current HTTP response buffer.
@@ -618,8 +564,8 @@ LAST-REQUEST is used to verify this is still the current request."
 	(let ((response-buffer (current-buffer)))
 		(unwind-protect
 				(when (and (equal last-request
-												 (buffer-local-value 'languagetool-server-last-request
-																						 checking-buffer))
+													(buffer-local-value 'languagetool-server-last-request
+																							checking-buffer))
 									 (buffer-live-p checking-buffer)
 									 (not (buffer-local-value 'languagetool-server-correcting-p
 																						checking-buffer)))

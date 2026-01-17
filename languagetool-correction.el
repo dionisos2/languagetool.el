@@ -6,7 +6,6 @@
 ;; Keywords: grammar text docs tools convenience checker
 ;; URL: https://github.com/PillFall/Emacs-LanguageTool.el
 ;; Version: 1.3.0
-;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -34,7 +33,7 @@
 ;; Variable definitions:
 
 (defcustom languagetool-correction-keys
-	 (string-to-vector "1234567890abcdefghijklmnopqrstuvwxyz")
+	(string-to-vector "1234567890abcdefghijklmnopqrstuvwxyz")
 	"Vector of keys used for LanguageTool suggestion selection.
 
 Each element should be a character (integer) used to select suggestions."
@@ -49,9 +48,9 @@ Each element should be a character (integer) used to select suggestions."
 Get the information about corrections from OVERLAY."
 	(let* ((msg nil)
 				 (rule (or (alist-get 'id (overlay-get overlay 'languagetool-rule)) "unknown"))
-	 (message (or (overlay-get overlay 'languagetool-message) "No message"))
-	 (replacements (languagetool-core-get-replacements overlay))
-	 (num-choices (length replacements)))
+				 (message (or (overlay-get overlay 'languagetool-message) "No message"))
+				 (replacements (languagetool-core-get-replacements overlay))
+				 (num-choices (length replacements)))
 		;; Add LanguageTool rule to the message
 		(setq msg (concat msg "[" rule "] "))
 
@@ -67,29 +66,29 @@ Get the information about corrections from OVERLAY."
 		;; Format all choices
 		(dotimes (index num-choices)
 			(setq msg (concat msg
-			"["
-			(propertize
-			 (format "%c" (aref languagetool-correction-keys index))
-			 'face 'font-lock-keyword-face)
-			"]: "))
+												"["
+												(propertize
+												 (format "%c" (aref languagetool-correction-keys index))
+												 'face 'font-lock-keyword-face)
+												"]: "))
 			(setq msg (concat msg (nth index replacements) "	")))
 		;; Add default Ignore, Add and Skip options
 		(setq msg (concat msg "\n["
-					(propertize "C-i" 'face 'font-lock-keyword-face)
-					"]: Ignore rule	 "))
+											(propertize "C-i" 'face 'font-lock-keyword-face)
+											"]: Ignore rule	 "))
 		(setq msg (concat msg "["
-					(propertize "C-a" 'face 'font-lock-keyword-face)
-					"]: Add to LocalWords	 "))
+											(propertize "C-a" 'face 'font-lock-keyword-face)
+											"]: Add to LocalWords	 "))
 		(setq msg (concat msg "["
-					(propertize "C-s" 'face 'font-lock-keyword-face)
-					"]: Skip match	"))
+											(propertize "C-s" 'face 'font-lock-keyword-face)
+											"]: Skip match	"))
 		;; Some people do not know C-g is the global exit key
 		(setq msg (concat msg "["
-					(propertize "C-g" 'face 'font-lock-keyword-face)
-					"]: Quit\n"))))
+											(propertize "C-g" 'face 'font-lock-keyword-face)
+											"]: Quit\n"))))
 
-(defun languagetool-correction-add-word(word)
-	;; Append word to dictionary file
+(defun languagetool-correction-add-word (word)
+	"Append WORD to the personal dictionary file and reload the dictionary."
 	(let ((dict-file (languagetool-core--dict-file)))
 		(with-temp-buffer
 			(when (file-exists-p dict-file)
@@ -100,9 +99,7 @@ Get the information about corrections from OVERLAY."
 			(insert word "\n")
 			(write-region (point-min) (point-max) dict-file))
 		;; Reload dictionary list
-		(languagetool-core-load-dict-file)
-		)
-	)
+		(languagetool-core-load-dict-file)))
 
 (defun languagetool-correction-apply (pressed-key overlay)
 	"Apply LanguageTool replacement suggestion in OVERLAY.
@@ -113,13 +110,12 @@ on OVERLAY."
 	 ((char-equal ?\C-i pressed-key)
 		(save-excursion
 			(let ((rule-id (alist-get 'id (overlay-get overlay 'languagetool-rule))))
-	(languagetool-update-rule-for-current-buffer rule-id)
-	(delete-overlay overlay))))
+				(languagetool-update-rule-for-current-buffer rule-id)
+				(delete-overlay overlay))))
 	 ((char-equal ?\C-a pressed-key)
 		(progn
 			(let ((word (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay))))
-				(languagetool-correction-add-word word)
-			)
+				(languagetool-correction-add-word word))
 			(goto-char (overlay-end overlay))
 			(delete-overlay overlay)))
 	 ((char-equal ?\C-s pressed-key)
@@ -128,9 +124,9 @@ on OVERLAY."
 		(error "Key `%c' cannot be used" pressed-key))
 	 (t
 		(let ((size (length (languagetool-core-get-replacements overlay)))
-		(pos (cl-position pressed-key languagetool-correction-keys)))
+					(pos (cl-position pressed-key languagetool-correction-keys)))
 			(when (> (1+ pos) size)
-	(error "Correction key `%c' cannot be used" pressed-key))
+				(error "Correction key `%c' cannot be used" pressed-key))
 			(delete-region (overlay-start overlay) (overlay-end overlay))
 			(insert (nth pos (languagetool-core-get-replacements overlay)))
 			(delete-overlay overlay)))))
@@ -149,4 +145,4 @@ on OVERLAY."
 
 ;;; languagetool-correction.el ends here
 
-; LocalWords:	 languagetool
+																				; LocalWords:	 languagetool

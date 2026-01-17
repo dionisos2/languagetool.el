@@ -6,7 +6,6 @@
 ;; Keywords: grammar text docs tools convenience checker
 ;; URL: https://github.com/PillFall/Emacs-LanguageTool.el
 ;; Version: 1.3.0
-;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -37,8 +36,8 @@
 	"LanguageTool API Key for Premium features."
 	:group 'languagetool
 	:type '(choice
-		(const nil)
-		string))
+					(const nil)
+					string))
 
 (defcustom languagetool-username nil
 	"LanguageTool Username for Premium features.
@@ -46,8 +45,8 @@
 Your username/email as used to log in at languagetool.org."
 	:group 'languagetool
 	:type '(choice
-		(const nil)
-		string))
+					(const nil)
+					string))
 
 (defcustom languagetool-correction-language "auto"
 	"LanguageTool correction and checking language.
@@ -58,8 +57,8 @@ the text is written in or \"auto\" for automatic calculation."
 	:local t
 	:safe #'languagetool-core-safe-language
 	:type '(choice
-		string
-		(const "auto")))
+					string
+					(const "auto")))
 
 (defcustom languagetool-mother-tongue nil
 	"Your mother tongue for being aware of false friends.
@@ -68,13 +67,13 @@ As in some languages two differents word can look or sound
 similar, but differ in meaning.
 
 For example in English you have the word \"abnegation\", that is
-translated to Polish as \"poświęcenie\". But there is a word in
+translated to Polish as \"poświęcenie\".  But there is a word in
 Polish \"abnegacja\" which means slovenliness or untidiness,
 which can be mistranslated."
 	:group 'languagetool
 	:type '(choice
-		(const nil)
-		string))
+					(const nil)
+					string))
 
 (defcustom languagetool-suggestion-level nil
 	"If set, additional rules will be activated.
@@ -84,8 +83,8 @@ formal text."
 	:group 'languagetool
 	:local t
 	:type '(choice
-		(const nil)
-		string))
+					(const nil)
+					string))
 
 (defcustom languagetool-core-languages
 	'(("auto" . "Automatic Detection")
@@ -143,8 +142,8 @@ formal text."
 Each element is a cons-cell with the form (CODE . NAME)."
 	:group 'languagetool
 	:type '(alist
-		:key-type (string :tag "Code")
-		:value-type (string :tag "Name")))
+					:key-type (string :tag "Code")
+					:value-type (string :tag "Name")))
 
 (defvar-local languagetool-correction-language-history nil
 	"Buffer local LanguageTool correction language history.")
@@ -153,8 +152,8 @@ Each element is a cons-cell with the form (CODE . NAME)."
 	"LanguageTool global disabled rules."
 	:group 'languagetool
 	:type '(choice
-		(const nil)
-		(repeat string)))
+					(const nil)
+					(repeat string)))
 
 (defcustom languagetool-local-disabled-rules nil
 	"LanguageTool buffer local disabled rules."
@@ -162,19 +161,19 @@ Each element is a cons-cell with the form (CODE . NAME)."
 	:local t
 	:safe #'languagetool-core-safe-rules
 	:type '(choice
-		(const nil)
-		(repeat string)))
+					(const nil)
+					(repeat string)))
 
 
 (defcustom languagetool-hint-function
 	'languagetool-core-hint-default-function
 	"Display error information in the minibuffer.
 
-The function must search for overlays at point. You must pass the
+The function must search for overlays at point.  You must pass the
 function symbol.
 
-A example hint function:
-(defun hint-function ()
+An example hint function:
+\\(defun hint-function ()
 	\"Hint display function.\"
 	(dolist (ov (overlays-at (point)))
 		(when (overlay-get ov \\='languagetool-message)
@@ -190,8 +189,8 @@ A example hint function:
 		 \"\"))))))"
 	:group 'languagetool
 	:type '(choice
-		(const nil)
-		function))
+					(const nil)
+					function))
 
 (defcustom languagetool-hint-idle-delay 2
 	"Number of seconds idle before showing hint."
@@ -212,9 +211,9 @@ A example hint function:
 To be valid, RULES must be a list of strings form of \"UPPER_UNDERSCORE\"."
 	(and (listp rules)
 			 (seq-every-p (lambda (rule)
-					(and (stringp rule)
-				 (string-match-p "^[A-Z_]+$" rule)))
-				rules)))
+											(and (stringp rule)
+													 (string-match-p "^[A-Z_]+$" rule)))
+										rules)))
 
 (defun languagetool-core-clear-buffer ()
 	"Deletes all buffer overlays."
@@ -222,41 +221,41 @@ To be valid, RULES must be a list of strings form of \"UPPER_UNDERSCORE\"."
 		(widen)
 		(save-excursion
 			(dolist (ov (overlays-in (point-min) (point-max)))
-	(when (overlay-get ov 'languagetool-message)
-		(delete-overlay ov))))))
+				(when (overlay-get ov 'languagetool-message)
+					(delete-overlay ov))))))
 
 (defun languagetool-core-clear-region (start end)
 	"Delete LanguageTool overlays only in the specified region.
 
-START and END define the region boundaries. This function is used
+START and END define the region boundaries.  This function is used
 for selective overlay clearing in visible text mode to preserve
 overlays outside the region being updated."
 	(save-restriction
 		(widen)
 		(save-excursion
 			(dolist (ov (overlays-in start end))
-	(when (overlay-get ov 'languagetool-message)
-		(delete-overlay ov))))))
+				(when (overlay-get ov 'languagetool-message)
+					(delete-overlay ov))))))
 
 (defun languagetool-core-hint-default-function ()
 	"Default hint display function."
 	(dolist (ov (overlays-at (point)))
 		(when (overlay-get ov 'languagetool-message)
 			(unless (current-message)
-	(message
-	 "%s%s"
-	 (overlay-get ov 'languagetool-short-message)
-	 (if (/= 0 (length (overlay-get ov 'languagetool-replacements)))
-			 (concat
-				" -> ("
-				(string-join (languagetool-core-get-replacements ov) ", ")
-				")")
-		 ""))))))
+				(message
+				 "%s%s"
+				 (overlay-get ov 'languagetool-short-message)
+				 (if (/= 0 (length (overlay-get ov 'languagetool-replacements)))
+						 (concat
+							" -> ("
+							(string-join (languagetool-core-get-replacements ov) ", ")
+							")")
+					 ""))))))
 
 (defun languagetool-core-get-replacements (overlay)
 	"Return the replacements of OVERLAY in a list."
 	(let ((replacements (overlay-get overlay 'languagetool-replacements))
-	replace)
+				replace)
 		(dotimes (index (length replacements))
 			(push (alist-get 'value (aref replacements index)) replace))
 		(reverse replace)))
@@ -276,11 +275,10 @@ Each function should accept a single argument WORD and return t if the word shou
 	:group 'languagetool)
 
 (defun languagetool-core--dict-file ()
-	"Return the personal dictionary file name according to `languagetool-correction-language`."
+	"Return the personal dictionary file name according to `languagetool-correction-language'."
 	(expand-file-name
 	 (format "languagetool-dict-%s.txt" languagetool-correction-language)
-	 languagetool-dict-directory)
-	)
+	 languagetool-dict-directory))
 
 (defvar languagetool-core--dict-word-list nil
 	"List of words loaded from the personal dictionary file.")
@@ -290,16 +288,13 @@ Each function should accept a single argument WORD and return t if the word shou
 	(interactive)
 	(let ((dict-file (languagetool-core--dict-file)))
 		(if (file-exists-p dict-file)
-	(setq languagetool-core--dict-word-list
-				(split-string
-				 (with-temp-buffer
-		 (insert-file-contents dict-file)
-		 (buffer-string))
-				 "\n" t))
-			(setq languagetool-core--dict-word-list nil)
-			)
-		)
-	)
+				(setq languagetool-core--dict-word-list
+							(split-string
+							 (with-temp-buffer
+								 (insert-file-contents dict-file)
+								 (buffer-string))
+							 "\n" t))
+			(setq languagetool-core--dict-word-list nil))))
 
 (defun languagetool-core--word-in-dict-file-p (word)
 	"Return t if WORD is present in the in-memory dictionary word list."
@@ -307,68 +302,58 @@ Each function should accept a single argument WORD and return t if the word shou
 			 (member word languagetool-core--dict-word-list)))
 
 (defun languagetool-core-correct-p (word)
-	"Return t if any predicate in `languagetool-core-correct-predicates' returns t for WORD.
+	"Return t if any predicate in `languagetool-core-correct-predicates' for WORD.
 
 This means the word should be ignored and not corrected."
 	(seq-some (lambda (pred)
-				(and (functionp pred)
-			 (funcall pred word)))
-			languagetool-core-correct-predicates)
-	)
+							(and (functionp pred)
+									 (funcall pred word)))
+						languagetool-core-correct-predicates))
 
 (defvar languagetool-rules-json-path
 	(expand-file-name "languagetool-rules.json" languagetool-dict-directory)
-	"Path to the global LanguageTool rules JSON file."
-	)
+	"Path to the global LanguageTool rules JSON file.")
 
 (defun languagetool-load-rules-json ()
 	"Load the LanguageTool disabled rules dictionary from the JSON file as a hash-table."
 	(let ((ht (make-hash-table :test 'equal)))
 		(when (and (file-exists-p languagetool-rules-json-path)
-				 (> (nth 7 (file-attributes languagetool-rules-json-path)) 0))
+							 (> (nth 7 (file-attributes languagetool-rules-json-path)) 0))
 			(condition-case err
-		(let ((json-data (json-read-file languagetool-rules-json-path)))
-			(when json-data
-				;; Handle JSON as alist of (key . value) pairs
-				(if (and (listp json-data) (consp (car json-data)))
-			(dolist (pair json-data)
-				(when (consp pair)
-					(let ((key (car pair))
-					(value (cdr pair)))
-			;; Convert symbol key to string if needed
-			(when (symbolp key)
-				(setq key (symbol-name key)))
-			(when (stringp key)
-				;; Convert vector to list if needed
-				(when (vectorp value)
-					(setq value (append value nil)))
-				(when (listp value)
-					(puthash key value ht))))))
-								)
-							)
-			)
-	(error
-	 (message "ERROR: Could not parse LanguageTool rules JSON file: %s"
-			(error-message-string err))))
-			)
-		ht)
-	)
+					(let ((json-data (json-read-file languagetool-rules-json-path)))
+						(when json-data
+							;; Handle JSON as alist of (key . value) pairs
+							(when (and (listp json-data) (consp (car json-data)))
+								(dolist (pair json-data)
+									(when (consp pair)
+										(let ((key (car pair))
+													(value (cdr pair)))
+											;; Convert symbol key to string if needed
+											(when (symbolp key)
+												(setq key (symbol-name key)))
+											(when (stringp key)
+												;; Convert vector to list if needed
+												(when (vectorp value)
+													(setq value (append value nil)))
+												(when (listp value)
+													(puthash key value ht)))))))))
+				(error
+				 (message "ERROR: Could not parse LanguageTool rules JSON file: %s"
+									(error-message-string err)))))
+		ht))
 
 (defun languagetool-save-rules-json (rules)
-	"Save the LanguageTool disabled rules dictionary to the JSON file."
+	"Save the LanguageTool disabled RULES dictionary to the JSON file."
 	(unless (file-directory-p languagetool-dict-directory)
 		(make-directory languagetool-dict-directory t))
 	(let (alist)
 		(maphash (lambda (k v)
-				 (push (cons k v) alist))
-			 rules)
+							 (push (cons k v) alist))
+						 rules)
 		(setq alist (nreverse alist))
 		(let ((json-string (json-encode alist)))
 			(with-temp-file languagetool-rules-json-path
-	(insert json-string))
-			)
-		)
-	)
+				(insert json-string)))))
 
 (defun languagetool-get-rules-for-file (file)
 	"Return the list of disabled rule IDs for the given FILE."
@@ -379,11 +364,11 @@ This means the word should be ignored and not corrected."
 	"Add or remove a rule for FILE in the LanguageTool rules JSON.
 If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID."
 	(let* ((rules (languagetool-load-rules-json))
-	 (file-rules (gethash file rules '())))
+				 (file-rules (gethash file rules '())))
 		(if remove
-	(setq file-rules (remove rule-id file-rules))
+				(setq file-rules (remove rule-id file-rules))
 			(unless (member rule-id file-rules)
-	(push rule-id file-rules)))
+				(push rule-id file-rules)))
 		(puthash file file-rules rules)
 		(languagetool-save-rules-json rules)))
 

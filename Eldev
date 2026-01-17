@@ -20,7 +20,7 @@
 (eldev-use-plugin 'undercover)
 
 ;; Byte-compilation settings - exclude non-project files
-(setf eldev-standard-excludes '(".dir-locals.el" ".eldev" "./eldev"))
+(setf eldev-standard-excludes '(".dir-locals.el" ".eldev" "./eldev" "utils.el" "languagetool.el-autoloads.el" "languagetool-debug.el"))
 
 ;; Linting configuration
 (setf eldev-lint-default '(elisp))

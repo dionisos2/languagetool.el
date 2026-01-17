@@ -6,7 +6,6 @@
 ;; Keywords: grammar text docs tools convenience checker
 ;; URL: https://github.com/PillFall/Emacs-LanguageTool.el
 ;; Version: 1.3.0
-;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -66,8 +65,8 @@ For example to use in Arch Linux (with pacman dependency):
 	\"/usr/share/languagetool:/usr/share/java/languagetool/*\"))"
 	:group 'languagetool-java
 	:type '(choice
-		(const nil)
-		(repeat string)))
+					(const nil)
+					(repeat string)))
 
 ;; Function definitions:
 

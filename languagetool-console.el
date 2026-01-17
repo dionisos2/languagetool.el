@@ -6,7 +6,6 @@
 ;; Keywords: grammar text docs tools convenience checker
 ;; URL: https://github.com/PillFall/Emacs-LanguageTool.el
 ;; Version: 1.3.0
-;; Package-Requires: ((emacs "27.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -52,8 +51,8 @@ When using LanguageTool you should set this variable to either
 the path or the class to call LanguageTool."
 	:group 'languagetool-console
 	:type '(choice
-		file
-		string))
+					file
+					string))
 
 (defcustom languagetool-console-arguments nil
 	"LanguageTool Command Line extra arguments.
@@ -61,8 +60,8 @@ the path or the class to call LanguageTool."
 More info at http://wiki.languagetool.org/command-line-options."
 	:group 'languagetool-console
 	:type '(choice
-		(const nil)
-		(repeat string)))
+					(const nil)
+					(repeat string)))
 
 (defvar languagetool-console-output-buffer-name "*LanguageTool Output*"
 	"LanguageTool Console output buffer for debugging.
@@ -78,17 +77,17 @@ Command Line.")
 (defun languagetool-console-class-p ()
 	"Return non-nil if `languagetool-console-command' is a Java class."
 	(let ((regex (rx
-		line-start
-		(zero-or-more
-		 (group
-			(in alpha ?_ ?$)
-			(zero-or-more
-			 (in alnum ?_ ?$))
-			?.))
-		(in alpha ?_ ?$)
-		(zero-or-more
-		 (in alnum ?_ ?$))
-		line-end)))
+								line-start
+								(zero-or-more
+								 (group
+									(in alpha ?_ ?$)
+									(zero-or-more
+									 (in alnum ?_ ?$))
+									?.))
+								(in alpha ?_ ?$)
+								(zero-or-more
+								 (in alnum ?_ ?$))
+								line-end)))
 		(string-match-p regex languagetool-console-command)))
 
 (defun languagetool-console-command-exists-p ()
@@ -98,8 +97,8 @@ Also sets `languagetool-console-command' to a full path if needed
 for this package to work."
 	(or (languagetool-console-class-p)
 			(when (file-readable-p (file-truename languagetool-console-command))
-	(setq languagetool-console-command (file-truename languagetool-console-command))
-	t)))
+				(setq languagetool-console-command (file-truename languagetool-console-command))
+				t)))
 
 (defun languagetool-console-parse-arguments ()
 	"Return the LanguageTool Command Line arguments as a list."
@@ -121,7 +120,7 @@ for this package to work."
 
 		;; Appends the correction language information
 		(if (string= languagetool-correction-language "auto")
-	(push "--autoDetect" arguments)
+				(push "--autoDetect" arguments)
 			(push (list "--language" languagetool-correction-language) arguments))
 
 		;; Appends the mother tongue information
@@ -135,7 +134,7 @@ for this package to work."
 		;; Appends the disabled rules
 		(let ((rules (string-join (append languagetool-disabled-rules (languagetool-get-rules-for-current-buffer)) ",")))
 			(unless (string= rules "")
-	(push (list "--disable" rules) arguments )))
+				(push (list "--disable" rules) arguments )))
 		(flatten-tree (reverse arguments))))
 
 (defun languagetool-console-write-debug-info (parsed-arguments text)
@@ -175,30 +174,30 @@ The region is delimited by BEGIN and END."
 
 	(save-excursion
 		(let ((status 0)
-		(buffer (get-buffer-create languagetool-console-output-buffer-name))
-		(text (buffer-substring-no-properties begin end))
-		(json-parsed nil)
-		(parsed-arguments
-		 (append
-			(languagetool-java-parse-arguments)
-			(languagetool-console-parse-arguments))))
+					(buffer (get-buffer-create languagetool-console-output-buffer-name))
+					(text (buffer-substring-no-properties begin end))
+					(json-parsed nil)
+					(parsed-arguments
+					 (append
+						(languagetool-java-parse-arguments)
+						(languagetool-console-parse-arguments))))
 			(with-current-buffer buffer
-	(erase-buffer)
-	(languagetool-console-write-debug-info parsed-arguments text))
+				(erase-buffer)
+				(languagetool-console-write-debug-info parsed-arguments text))
 			(setq status
-			(apply #'call-process-region begin end
-			 languagetool-java-bin
-			 nil
-			 languagetool-console-output-buffer-name
-			 nil
-			 parsed-arguments))
+						(apply #'call-process-region begin end
+									 languagetool-java-bin
+									 nil
+									 languagetool-console-output-buffer-name
+									 nil
+									 parsed-arguments))
 			(when (/= status 0)
-	(error "LanguageTool returned with status %d" status))
+				(error "LanguageTool returned with status %d" status))
 			(with-current-buffer buffer
-	(widen)
-	(goto-char (point-max))
-	(backward-sexp)
-	(setq json-parsed (json-read)))
+				(widen)
+				(goto-char (point-max))
+				(backward-sexp)
+				(setq json-parsed (json-read)))
 			(setq languagetool-console-output-parsed json-parsed)))
 	(pop-mark))
 
@@ -209,10 +208,10 @@ This function checks for the region delimited by BEGIN and END."
 	(languagetool-console-invoke-command-region begin end)
 	(if (languagetool-console-matches-exists-p)
 			(progn
-	(message (substitute-command-keys "LangugeTool finished.
+				(message (substitute-command-keys "LangugeTool finished.
 Use \\[languagetool-correct-buffer] to correct the buffer."))
-	(languagetool-console-highlight-matches begin)
-	(run-hooks 'languagetool-error-exists-hook))
+				(languagetool-console-highlight-matches begin)
+				(run-hooks 'languagetool-error-exists-hook))
 		(progn
 			(message "LanguageTool finished.
 Found no errors.")
@@ -230,18 +229,18 @@ BEGIN defines the start of the current region."
 	(when-let ((corrections (alist-get 'matches languagetool-console-output-parsed)))
 		(dotimes (index (length corrections))
 			(let* ((correction (aref corrections index))
-			 (offset (alist-get 'offset correction))
-			 (size (alist-get 'length correction))
-			 (start (+ begin offset))
-			 (end (+ begin offset size))
-			 (word (buffer-substring-no-properties start end)))
-	(unless (languagetool-core-correct-p word)
-		(languagetool-issue-create-overlay start end correction)))))
+						 (offset (alist-get 'offset correction))
+						 (size (alist-get 'length correction))
+						 (start (+ begin offset))
+						 (end (+ begin offset size))
+						 (word (buffer-substring-no-properties start end)))
+				(unless (languagetool-core-correct-p word)
+					(languagetool-issue-create-overlay start end correction)))))
 	;; Only create hint timer if not already running
 	(unless (timerp languagetool-core-hint-timer)
 		(setq languagetool-core-hint-timer
-		(run-with-idle-timer languagetool-hint-idle-delay t
-						 languagetool-hint-function))))
+					(run-with-idle-timer languagetool-hint-idle-delay t
+															 languagetool-hint-function))))
 
 (provide 'languagetool-console)
 
