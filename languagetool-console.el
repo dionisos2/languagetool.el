@@ -226,7 +226,8 @@ Found no errors.")
   "Highlight issues in the buffer.
 
 BEGIN defines the start of the current region."
-  (let ((corrections (alist-get 'matches languagetool-console-output-parsed)))
+  ;; Guard against nil corrections from malformed JSON
+  (when-let ((corrections (alist-get 'matches languagetool-console-output-parsed)))
     (dotimes (index (length corrections))
       (let* ((correction (aref corrections index))
              (offset (alist-get 'offset correction))
@@ -235,7 +236,9 @@ BEGIN defines the start of the current region."
              (end (+ begin offset size))
              (word (buffer-substring-no-properties start end)))
         (unless (languagetool-core-correct-p word)
-          (languagetool-issue-create-overlay start end correction))))
+          (languagetool-issue-create-overlay start end correction)))))
+  ;; Only create hint timer if not already running
+  (unless (timerp languagetool-core-hint-timer)
     (setq languagetool-core-hint-timer
           (run-with-idle-timer languagetool-hint-idle-delay t
                                languagetool-hint-function))))

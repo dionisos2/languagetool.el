@@ -48,8 +48,8 @@ Each element should be a character (integer) used to select suggestions."
 
 Get the information about corrections from OVERLAY."
   (let* ((msg nil)
-         (rule (alist-get 'id (overlay-get overlay 'languagetool-rule)))
-         (message (overlay-get overlay 'languagetool-message))
+         (rule (or (alist-get 'id (overlay-get overlay 'languagetool-rule)) "unknown"))
+         (message (or (overlay-get overlay 'languagetool-message) "No message"))
          (replacements (languagetool-core-get-replacements overlay))
          (num-choices (length replacements)))
     ;; Add LanguageTool rule to the message

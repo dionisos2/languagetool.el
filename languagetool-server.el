@@ -180,9 +180,11 @@ from hooks later. Each buffer gets its own unique closure."
 	(interactive)
 	(set-default 'languagetool-server-check-visible-text t)
 	(languagetool-server-clear)
-	(add-hook 'after-change-functions (languagetool-server-create-should-check-closure) nil t)
-	(add-hook 'window-scroll-functions (languagetool-server-create-should-check-closure) nil t)
-	(add-hook 'window-size-change-functions (languagetool-server-create-should-check-closure) nil t)
+	;; Create closure once and reuse for all hooks to avoid memory leaks
+	(let ((closure (languagetool-server-create-should-check-closure)))
+		(add-hook 'after-change-functions closure nil t)
+		(add-hook 'window-scroll-functions closure nil t)
+		(add-hook 'window-size-change-functions closure nil t))
 	)
 
 (defun languagetool-server-desactivate-check-visible-text ()
@@ -231,8 +233,9 @@ from hooks later. Each buffer gets its own unique closure."
 (defvar-local languagetool-server-open-communication-p nil
 	"Set to non-nil if server communication is open, nil otherwise.")
 
-(defvar languagetool-server-correcting-p nil
-	"Set to non-nil if correcting errors, nil otherwise.")
+(defvar-local languagetool-server-correcting-p nil
+	"Set to non-nil if correcting errors, nil otherwise.
+Buffer-local to allow independent correction in multiple buffers.")
 
 ;; Function definitions:
 
@@ -254,10 +257,11 @@ Don't use this function, use `languagetool-server-mode' instead."
 	;; Initial check of visible text
   (languagetool-server-should-check)
 
-  ;; Init hint timer in the current buffer if not already
-  (setq languagetool-core-hint-timer
-        (run-with-idle-timer languagetool-hint-idle-delay t
-														 languagetool-hint-function)))
+  ;; Init hint timer if not already running
+  (unless (timerp languagetool-core-hint-timer)
+    (setq languagetool-core-hint-timer
+          (run-with-idle-timer languagetool-hint-idle-delay t
+                               languagetool-hint-function))))
 
 (defun languagetool-server-mode-off ()
   "Turn off LanguageTool Server mode.
@@ -331,10 +335,11 @@ It's not recommended to run this function more than once."
 			;; Does not block Emacs when close and do not shutdown the server
 			(set-process-query-on-exit-flag languagetool-server-process nil))
 
-		;; Start running the hint idle timer
-		(setq languagetool-core-hint-timer
-					(run-with-idle-timer languagetool-hint-idle-delay t
-															 languagetool-hint-function))))
+		;; Start running the hint idle timer if not already running
+		(unless (timerp languagetool-core-hint-timer)
+			(setq languagetool-core-hint-timer
+						(run-with-idle-timer languagetool-hint-idle-delay t
+																 languagetool-hint-function)))))
 
 (defun languagetool-server-parse-arguments ()
 	"Parse the arguments needed to start HTTP server."
@@ -570,54 +575,48 @@ the relevant region or text has changed."
 
 (defun languagetool-server-highlight-matches (_status checking-buffer region-start last-request)
   "Highlight LanguageTool Server issues in CHECKING-BUFFER for region starting at REGION-START."
-  (when (equal last-request (buffer-local-value 'languagetool-server-last-request checking-buffer))
-    (message (concat "languagetool-server-highlight-matches: " (buffer-name checking-buffer)))
-    (when (/= (symbol-value 'url-http-response-status) 200)
-      (error "LanguageTool Server closed"))
-    (unless languagetool-server-correcting-p
-      (set-buffer-multibyte t)
-      (goto-char (point-max))
-      (backward-sexp)
-      (let ((json-parsed (json-read)))
-        (with-current-buffer checking-buffer
-          (save-excursion
-            ;; Safety check: verify buffer is still valid
-            (when (buffer-live-p checking-buffer)
-              ;; Smart overlay clearing for visible text mode
-              (if languagetool-server-check-visible-text
-                  (languagetool-core-clear-buffer)
-                (languagetool-core-clear-buffer))
-              (when languagetool-server-mode
-                (let ((corrections (alist-get 'matches json-parsed))
-                      (buffer-max (point-max)))
-                  (dotimes (index (length corrections))
-                    (let* ((correction (aref corrections index))
-                           (offset (alist-get 'offset correction))
-                           (size   (alist-get 'length correction))
-                           (start  (+ region-start offset))
-                           (end    (+ region-start offset size)))
-                      ;; Safety check: verify positions are valid
-                      (when (and (>= start (point-min))
-                                 (<= end buffer-max)
-                                 (< start end))
-                        (let ((word (buffer-substring-no-properties start end)))
-                          (unless (languagetool-core-correct-p word)
-                            (languagetool-issue-create-overlay start end correction)))))))))))))))
-
-(defun languagetool-server-clear-region-overlays (buffer region-start)
-  "Clear LanguageTool overlays only in the region being checked.
-
-REGION-START is the start position of the region being checked.
-This function preserves overlays outside the checked region to avoid
-unnecessary clearing and redrawing when only part of the visible text changes."
-  (when languagetool-server-check-visible-text
-    (let* ((region (languagetool-server-get-region buffer))
-           (region-end (cdr region)))
-      ;; Only clear overlays within the current visible region
-      (dolist (ov (overlays-in region-start region-end))
-        (when (overlay-get ov 'languagetool-message)
-          (delete-overlay ov))))))
-
+  ;; Save the HTTP response buffer so we can clean it up at the end
+  (let ((response-buffer (current-buffer)))
+    (unwind-protect
+        (when (equal last-request (buffer-local-value 'languagetool-server-last-request checking-buffer))
+          (message (concat "languagetool-server-highlight-matches: " (buffer-name checking-buffer)))
+          (when (/= (symbol-value 'url-http-response-status) 200)
+            (error "LanguageTool Server closed"))
+          (unless (buffer-local-value 'languagetool-server-correcting-p checking-buffer)
+            (set-buffer-multibyte t)
+            (goto-char (point-max))
+            (backward-sexp)
+            ;; Wrap JSON parsing in condition-case to handle malformed responses
+            (condition-case err
+                (let ((json-parsed (json-read)))
+                  (with-current-buffer checking-buffer
+                    (save-excursion
+                      ;; Safety check: verify buffer is still valid
+                      (when (buffer-live-p checking-buffer)
+                        ;; Clear existing overlays
+                        (languagetool-core-clear-buffer)
+                        (when languagetool-server-mode
+                          ;; Use when-let to guard against nil matches
+                          (when-let ((corrections (alist-get 'matches json-parsed)))
+                            (let ((buffer-max (point-max)))
+                              (dotimes (index (length corrections))
+                                (let* ((correction (aref corrections index))
+                                       (offset (alist-get 'offset correction))
+                                       (size   (alist-get 'length correction))
+                                       (start  (+ region-start offset))
+                                       (end    (+ region-start offset size)))
+                                  ;; Safety check: verify positions are valid
+                                  (when (and (>= start (point-min))
+                                             (<= end buffer-max)
+                                             (< start end))
+                                    (let ((word (buffer-substring-no-properties start end)))
+                                      (unless (languagetool-core-correct-p word)
+                                        (languagetool-issue-create-overlay start end correction)))))))))))))
+              (json-error
+               (message "LanguageTool: Failed to parse server response: %s" (error-message-string err))))))
+      ;; Always kill the HTTP response buffer to prevent memory leak
+      (when (buffer-live-p response-buffer)
+        (kill-buffer response-buffer)))))
 
 (provide 'languagetool-server)
 

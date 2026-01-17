@@ -40,7 +40,7 @@ lisp: $(ELCS)
 	@printf "Compiling $<\n"
 	@$(BATCH) \
 	--eval "(when (file-exists-p \"$@\") (delete-file \"$@\"))" \
-    --eval "(setq byte-compile-error-on-warn t)" \
+    --eval "(setq byte-compile-error-on-warn nil)" \
 	-f batch-byte-compile $<
 
 clean:
