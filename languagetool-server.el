@@ -573,50 +573,66 @@ the relevant region or text has changed."
 		)
 	)
 
-(defun languagetool-server-highlight-matches (_status checking-buffer region-start last-request)
-	"Highlight LanguageTool Server issues in CHECKING-BUFFER for region starting at REGION-START."
-	;; Save the HTTP response buffer so we can clean it up at the end
-	(let ((response-buffer (current-buffer)))
-		(unwind-protect
-	(when (equal last-request (buffer-local-value 'languagetool-server-last-request checking-buffer))
-		(message (concat "languagetool-server-highlight-matches: " (buffer-name checking-buffer)))
-		(when (/= (symbol-value 'url-http-response-status) 200)
-			(error "LanguageTool Server closed"))
-		(unless (buffer-local-value 'languagetool-server-correcting-p checking-buffer)
-			(set-buffer-multibyte t)
-			(goto-char (point-max))
-			(backward-sexp)
-			;; Wrap JSON parsing in condition-case to handle malformed responses
-			(condition-case err
-		(let ((json-parsed (json-read)))
-			(with-current-buffer checking-buffer
-				(save-excursion
-					;; Safety check: verify buffer is still valid
-					(when (buffer-live-p checking-buffer)
-			;; Clear existing overlays
-			(languagetool-core-clear-buffer)
-			(when languagetool-server-mode
-				;; Use when-let to guard against nil matches
-				(when-let ((corrections (alist-get 'matches json-parsed)))
-					(let ((buffer-max (point-max)))
-						(dotimes (index (length corrections))
-				(let* ((correction (aref corrections index))
-							 (offset (alist-get 'offset correction))
-							 (size	 (alist-get 'length correction))
-							 (start	 (+ region-start offset))
-							 (end		 (+ region-start offset size)))
-					;; Safety check: verify positions are valid
-					(when (and (>= start (point-min))
+(defun languagetool-server--parse-response ()
+	"Parse JSON response from current HTTP response buffer.
+Return parsed JSON or nil if parsing fails."
+	(set-buffer-multibyte t)
+	(goto-char (point-max))
+	(backward-sexp)
+	(condition-case err
+			(json-read)
+		(json-error
+		 (message "LanguageTool: Failed to parse server response: %s"
+							(error-message-string err))
+		 nil)))
+
+(defun languagetool-server--apply-correction (correction region-start buffer-max)
+	"Apply a single CORRECTION overlay at REGION-START offset.
+BUFFER-MAX is used for bounds checking."
+	(let* ((offset (alist-get 'offset correction))
+				 (size (alist-get 'length correction))
+				 (start (+ region-start offset))
+				 (end (+ region-start offset size)))
+		(when (and (>= start (point-min))
 							 (<= end buffer-max)
 							 (< start end))
-						(let ((word (buffer-substring-no-properties start end)))
-							(unless (languagetool-core-correct-p word)
-					(languagetool-issue-create-overlay start end correction)))))))))))))
-				(json-error
-				 (message "LanguageTool: Failed to parse server response: %s" (error-message-string err))))))
-			;; Always kill the HTTP response buffer to prevent memory leak
+			(let ((word (buffer-substring-no-properties start end)))
+				(unless (languagetool-core-correct-p word)
+					(languagetool-issue-create-overlay start end correction))))))
+
+(defun languagetool-server--apply-corrections (json-parsed region-start)
+	"Apply corrections from JSON-PARSED to current buffer.
+REGION-START is the offset for correction positions."
+	(languagetool-core-clear-buffer)
+	(when languagetool-server-mode
+		(when-let ((corrections (alist-get 'matches json-parsed)))
+			(let ((buffer-max (point-max)))
+				(dotimes (index (length corrections))
+					(languagetool-server--apply-correction
+					 (aref corrections index) region-start buffer-max))))))
+
+(defun languagetool-server-highlight-matches (_status checking-buffer region-start last-request)
+	"Highlight LanguageTool Server issues in CHECKING-BUFFER.
+REGION-START is the starting position for the checked region.
+LAST-REQUEST is used to verify this is still the current request."
+	(let ((response-buffer (current-buffer)))
+		(unwind-protect
+				(when (and (equal last-request
+												 (buffer-local-value 'languagetool-server-last-request
+																						 checking-buffer))
+									 (buffer-live-p checking-buffer)
+									 (not (buffer-local-value 'languagetool-server-correcting-p
+																						checking-buffer)))
+					(message "languagetool-server-highlight-matches: %s"
+									 (buffer-name checking-buffer))
+					(when (/= (symbol-value 'url-http-response-status) 200)
+						(error "LanguageTool Server closed"))
+					(when-let ((json-parsed (languagetool-server--parse-response)))
+						(with-current-buffer checking-buffer
+							(save-excursion
+								(languagetool-server--apply-corrections json-parsed region-start)))))
 			(when (buffer-live-p response-buffer)
-	(kill-buffer response-buffer)))))
+				(kill-buffer response-buffer)))))
 
 (provide 'languagetool-server)
 
