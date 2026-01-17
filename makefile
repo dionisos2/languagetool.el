@@ -71,7 +71,7 @@ eldev-lint:
 	@eldev lint
 
 eldev-coverage:
-	@eldev test --undercover
+	@eldev test --undercover=on,text
 
 eldev-clean:
 	@eldev clean
