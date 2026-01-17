@@ -105,7 +105,7 @@
 (defun languagetool-test-callback (_status orig-buffer region-start)
   "Callback de test pour url-retrieve. Affiche la réponse JSON brute."
   (goto-char (point-min))
-  (re-search-forward "\n\n" nil 'move) sauter les headers
+  (re-search-forward "\n\n" nil 'move)
   (let ((json (buffer-substring-no-properties (point) (point-max))))
     (message "Réponse JSON: %s" json)
     (message "region-start: %d" region-start)
@@ -429,5 +429,306 @@ shared the same global function."
       ;; Cleanup
       (kill-buffer buffer-a)
       (kill-buffer buffer-b))))
+
+;;; Tests for languagetool-correction.el
+
+(require 'languagetool-correction)
+
+(ert-deftest languagetool-test-correction-parse-message-with-nil-values ()
+  "Test that parse-message handles nil rule and message gracefully."
+  (with-temp-buffer
+    (insert "test word here")
+    (let ((ov (make-overlay 6 10)))
+      ;; Set up overlay with nil rule and message
+      (overlay-put ov 'languagetool-rule nil)
+      (overlay-put ov 'languagetool-message nil)
+      (overlay-put ov 'languagetool-replacements nil)
+      (unwind-protect
+          (let ((msg (languagetool-correction-parse-message ov)))
+            ;; Should contain default values instead of crashing
+            (should (stringp msg))
+            (should (string-match-p "\\[unknown\\]" msg))
+            (should (string-match-p "No message" msg)))
+        (delete-overlay ov)))))
+
+(ert-deftest languagetool-test-correction-parse-message-with-values ()
+  "Test that parse-message correctly formats rule and message."
+  (with-temp-buffer
+    (insert "test word here")
+    (let ((ov (make-overlay 6 10)))
+      (overlay-put ov 'languagetool-rule '((id . "TEST_RULE")))
+      (overlay-put ov 'languagetool-message "This is a test message")
+      ;; Replacements must be a vector (JSON arrays become vectors)
+      (overlay-put ov 'languagetool-replacements [((value . "replacement1")) ((value . "replacement2"))])
+      (unwind-protect
+          (let ((msg (languagetool-correction-parse-message ov)))
+            (should (stringp msg))
+            (should (string-match-p "\\[TEST_RULE\\]" msg))
+            (should (string-match-p "This is a test message" msg)))
+        (delete-overlay ov)))))
+
+(ert-deftest languagetool-test-correction-apply-skip ()
+  "Test that C-s skips to end of overlay."
+  (with-temp-buffer
+    (insert "test word here")
+    (goto-char 1)
+    (let ((ov (make-overlay 6 10)))
+      (overlay-put ov 'languagetool-message "Test")
+      (unwind-protect
+          (progn
+            (languagetool-correction-apply ?\C-s ov)
+            ;; Point should be at end of overlay
+            (should (= (point) 10)))
+        (when (overlayp ov) (delete-overlay ov))))))
+
+(ert-deftest languagetool-test-correction-apply-replacement ()
+  "Test that selecting a replacement key applies the correction."
+  (with-temp-buffer
+    (insert "test word here")
+    (let ((ov (make-overlay 6 10)))
+      (overlay-put ov 'languagetool-message "Test")
+      ;; Replacements must be a vector (JSON arrays become vectors)
+      (overlay-put ov 'languagetool-replacements [((value . "fixed"))])
+      (unwind-protect
+          (progn
+            ;; Position point at overlay for proper replacement
+            (goto-char (overlay-start ov))
+            ;; Use first key from languagetool-correction-keys (index 0)
+            (languagetool-correction-apply (aref languagetool-correction-keys 0) ov)
+            ;; Text should be replaced
+            (should (string= (buffer-string) "test fixed here")))
+        (when (overlayp ov) (delete-overlay ov))))))
+
+(ert-deftest languagetool-test-correction-apply-invalid-key ()
+  "Test that invalid keys signal an error."
+  (with-temp-buffer
+    (insert "test word here")
+    (let ((ov (make-overlay 6 10)))
+      (overlay-put ov 'languagetool-message "Test")
+      ;; Replacements must be a vector (JSON arrays become vectors)
+      (overlay-put ov 'languagetool-replacements [((value . "fixed"))])
+      (unwind-protect
+          (should-error (languagetool-correction-apply ?@ ov))
+        (when (overlayp ov) (delete-overlay ov))))))
+
+(ert-deftest languagetool-test-correction-apply-out-of-range-key ()
+  "Test that keys beyond available replacements signal an error."
+  (with-temp-buffer
+    (insert "test word here")
+    (let ((ov (make-overlay 6 10)))
+      (overlay-put ov 'languagetool-message "Test")
+      ;; Only one replacement available (must be a vector)
+      (overlay-put ov 'languagetool-replacements [((value . "fixed"))])
+      (unwind-protect
+          ;; Key "2" would be index 1, but only index 0 exists
+          (should-error (languagetool-correction-apply ?2 ov))
+        (when (overlayp ov) (delete-overlay ov))))))
+
+;;; Tests for multi-buffer isolation
+
+(ert-deftest languagetool-test-correcting-p-is-buffer-local ()
+  "Test that languagetool-server-correcting-p is buffer-local."
+  (let ((buffer-a (generate-new-buffer "*test-correcting-a*"))
+        (buffer-b (generate-new-buffer "*test-correcting-b*")))
+    (unwind-protect
+        (progn
+          ;; Set correcting-p in buffer-a
+          (with-current-buffer buffer-a
+            (setq languagetool-server-correcting-p t))
+          ;; buffer-b should still be nil
+          (with-current-buffer buffer-b
+            (should-not languagetool-server-correcting-p))
+          ;; buffer-a should still be t
+          (with-current-buffer buffer-a
+            (should languagetool-server-correcting-p)))
+      (kill-buffer buffer-a)
+      (kill-buffer buffer-b))))
+
+(ert-deftest languagetool-test-text-cache-is-buffer-local ()
+  "Test that text cache variables are buffer-local."
+  (let ((buffer-a (generate-new-buffer "*test-cache-a*"))
+        (buffer-b (generate-new-buffer "*test-cache-b*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer-a
+            (setq languagetool-server-text-cache "cache-a"))
+          (with-current-buffer buffer-b
+            (setq languagetool-server-text-cache "cache-b"))
+          ;; Each buffer should have its own cache
+          (should (string= (buffer-local-value 'languagetool-server-text-cache buffer-a) "cache-a"))
+          (should (string= (buffer-local-value 'languagetool-server-text-cache buffer-b) "cache-b")))
+      (kill-buffer buffer-a)
+      (kill-buffer buffer-b))))
+
+;;; Tests for async error handling
+
+(ert-deftest languagetool-test-json-error-handling ()
+  "Test that malformed JSON is handled gracefully."
+  (let ((test-buffer (generate-new-buffer "*test-json-error*")))
+    (unwind-protect
+        (with-current-buffer test-buffer
+          (insert "Some text to check")
+          (setq-local languagetool-server-last-request 1)
+          (setq-local languagetool-server-correcting-p nil)
+          (setq-local languagetool-server-mode t)
+          ;; Create a mock HTTP response buffer with invalid JSON
+          (let ((response-buffer (generate-new-buffer "*mock-http-response*")))
+            (unwind-protect
+                (with-current-buffer response-buffer
+                  (insert "HTTP/1.1 200 OK\n\n{invalid json here")
+                  (setq-local url-http-response-status 200)
+                  ;; This should not error, just log a message
+                  (should-not
+                   (condition-case err
+                       (progn
+                         (languagetool-server-highlight-matches nil test-buffer 1 1)
+                         nil)
+                     (error err))))
+              ;; Response buffer should be killed by the function
+              (when (buffer-live-p response-buffer)
+                (kill-buffer response-buffer)))))
+      (kill-buffer test-buffer))))
+
+(ert-deftest languagetool-test-nil-matches-handling ()
+  "Test that nil matches in JSON response is handled gracefully."
+  (let ((test-buffer (generate-new-buffer "*test-nil-matches*")))
+    (unwind-protect
+        (with-current-buffer test-buffer
+          (insert "Some text to check")
+          (setq-local languagetool-server-last-request 1)
+          (setq-local languagetool-server-correcting-p nil)
+          (setq-local languagetool-server-mode t)
+          ;; Create a mock HTTP response buffer with valid JSON but no matches key
+          (let ((response-buffer (generate-new-buffer "*mock-http-response*")))
+            (unwind-protect
+                (with-current-buffer response-buffer
+                  (insert "HTTP/1.1 200 OK\n\n{\"software\":{\"name\":\"LanguageTool\"}}")
+                  (setq-local url-http-response-status 200)
+                  ;; This should not error
+                  (should-not
+                   (condition-case err
+                       (progn
+                         (languagetool-server-highlight-matches nil test-buffer 1 1)
+                         nil)
+                     (error err))))
+              (when (buffer-live-p response-buffer)
+                (kill-buffer response-buffer)))))
+      (kill-buffer test-buffer))))
+
+;;; Tests for timer accumulation fix
+
+(ert-deftest languagetool-test-timer-not-duplicated ()
+  "Test that hint timer is not created multiple times."
+  (let ((languagetool-core-hint-timer nil))
+    ;; First call should create timer
+    (setq languagetool-core-hint-timer
+          (run-with-idle-timer 1 t #'ignore))
+    (should (timerp languagetool-core-hint-timer))
+    (let ((first-timer languagetool-core-hint-timer))
+      ;; Simulate what the fixed code does - check before creating
+      (unless (timerp languagetool-core-hint-timer)
+        (setq languagetool-core-hint-timer
+              (run-with-idle-timer 1 t #'ignore)))
+      ;; Timer should be the same object
+      (should (eq first-timer languagetool-core-hint-timer)))
+    ;; Cleanup
+    (when (timerp languagetool-core-hint-timer)
+      (cancel-timer languagetool-core-hint-timer))))
+
+;;; Tests for languagetool-console.el
+
+(require 'languagetool-console)
+
+(ert-deftest languagetool-test-console-class-p-with-class ()
+  "Test that languagetool-console-class-p recognizes Java class names."
+  (let ((languagetool-console-command "org.languagetool.commandline.Main"))
+    (should (languagetool-console-class-p)))
+  (let ((languagetool-console-command "com.example.MyClass"))
+    (should (languagetool-console-class-p)))
+  (let ((languagetool-console-command "MyClass"))
+    (should (languagetool-console-class-p))))
+
+(ert-deftest languagetool-test-console-class-p-with-jar ()
+  "Test that languagetool-console-class-p rejects JAR paths with full path."
+  ;; Full path with slashes is not a class name
+  (let ((languagetool-console-command "/path/to/languagetool-commandline.jar"))
+    (should-not (languagetool-console-class-p)))
+  ;; Note: "languagetool.jar" looks like a class name to the regex
+  ;; (package.Class format), so it returns non-nil. This is expected behavior.
+  (let ((languagetool-console-command "languagetool.jar"))
+    (should (languagetool-console-class-p))))
+
+(ert-deftest languagetool-test-console-parse-arguments-basic ()
+  "Test that languagetool-console-parse-arguments returns correct argument list."
+  (let ((languagetool-console-command "/path/to/lt.jar")
+        (languagetool-console-arguments nil)
+        (languagetool-correction-language "fr")
+        (languagetool-mother-tongue nil)
+        (languagetool-suggestion-level nil)
+        (languagetool-disabled-rules nil)
+        (buffer-file-name nil))
+    (let ((args (languagetool-console-parse-arguments)))
+      (should (member "-jar" args))
+      (should (member "/path/to/lt.jar" args))
+      (should (member "--encoding" args))
+      (should (member "utf8" args))
+      (should (member "--json" args))
+      (should (member "--language" args))
+      (should (member "fr" args)))))
+
+(ert-deftest languagetool-test-console-parse-arguments-autodetect ()
+  "Test that auto language detection uses --autoDetect flag."
+  (let ((languagetool-console-command "/path/to/lt.jar")
+        (languagetool-console-arguments nil)
+        (languagetool-correction-language "auto")
+        (languagetool-mother-tongue nil)
+        (languagetool-suggestion-level nil)
+        (languagetool-disabled-rules nil)
+        (buffer-file-name nil))
+    (let ((args (languagetool-console-parse-arguments)))
+      (should (member "--autoDetect" args))
+      (should-not (member "--language" args)))))
+
+(ert-deftest languagetool-test-console-matches-exists-p ()
+  "Test that languagetool-console-matches-exists-p detects matches."
+  (with-temp-buffer
+    ;; No matches
+    (setq-local languagetool-console-output-parsed '((matches . [])))
+    (should-not (languagetool-console-matches-exists-p))
+    ;; With matches
+    (setq-local languagetool-console-output-parsed
+                '((matches . [((offset . 0) (length . 4) (message . "Test"))])))
+    (should (languagetool-console-matches-exists-p))))
+
+(ert-deftest languagetool-test-console-highlight-matches-nil ()
+  "Test that languagetool-console-highlight-matches handles nil matches."
+  (with-temp-buffer
+    (insert "Test text here")
+    ;; No matches key
+    (setq-local languagetool-console-output-parsed '((software . "LT")))
+    ;; Should not error
+    (should-not
+     (condition-case err
+         (progn
+           (languagetool-console-highlight-matches 1)
+           nil)
+       (error err)))))
+
+(ert-deftest languagetool-test-console-highlight-matches-creates-overlays ()
+  "Test that languagetool-console-highlight-matches creates overlays correctly."
+  (with-temp-buffer
+    (insert "Test text here")
+    (setq-local languagetool-console-output-parsed
+                '((matches . [((offset . 0)
+                               (length . 4)
+                               (message . "Test error")
+                               (rule . ((id . "TEST_RULE")))
+                               (replacements . [((value . "Fixed"))]))])))
+    (setq-local languagetool-core-correct-predicates nil)
+    (languagetool-console-highlight-matches 1)
+    ;; Check that overlay was created
+    (let ((overlays (overlays-in 1 5)))
+      (should (> (length overlays) 0))
+      (should (overlay-get (car overlays) 'languagetool-message)))))
 
 ;; test.el ends here

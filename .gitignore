@@ -16,3 +16,4 @@ env.mk
 .plandex-v2/
 
 CLAUDE.md
+languagetool-debug.el
