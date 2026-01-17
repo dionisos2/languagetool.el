@@ -17,3 +17,7 @@ env.mk
 
 CLAUDE.md
 languagetool-debug.el
+
+.eldev
+local-report.json
+*-autoloads.el

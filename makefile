@@ -52,3 +52,26 @@ clean:
 ci: lisp
 
 require: $(RQD_PKG)
+
+## Testing (legacy) ##################################################
+
+test:
+	@$(BATCH) -l test.el -f ert-run-tests-batch-and-exit
+
+## Eldev targets (recommended) #######################################
+## Install Eldev: curl -fsSL https://raw.github.com/emacs-eldev/eldev/master/webinstall/eldev | sh
+
+eldev-test:
+	@eldev test
+
+eldev-compile:
+	@eldev compile
+
+eldev-lint:
+	@eldev lint
+
+eldev-coverage:
+	@eldev test --undercover
+
+eldev-clean:
+	@eldev clean

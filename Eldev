@@ -1,0 +1,34 @@
+; -*- mode: emacs-lisp; lexical-binding: t; -*-
+
+;; Eldev configuration for languagetool.el
+;; See https://github.com/emacs-eldev/eldev for documentation
+
+;; Use MELPA for dependencies
+(eldev-use-package-archive 'melpa)
+
+;; Main package file
+(setf eldev-project-main-file "languagetool.el")
+
+;; Test configuration
+(setf eldev-test-framework 'ert)
+;; Add root directory as a place to find test files
+(eldev-add-loading-roots 'test ".")
+(setf eldev-test-fileset "test.el")
+
+;; Code coverage with undercover
+;; Run with: eldev test --undercover
+(eldev-use-plugin 'undercover)
+
+;; Byte-compilation settings - exclude test.el from compilation, not from testing
+(setf eldev-standard-excludes '(".dir-locals.el"))
+
+;; Linting configuration
+(setf eldev-lint-default '(elisp))
+
+;; Disable fill-column (line length) warnings by setting a high value
+(add-hook 'eldev-lint-hook
+          (lambda ()
+            (setq-default fill-column 200)))
+
+;; Package dependencies for testing
+(eldev-add-extra-dependencies 'test 'use-package)

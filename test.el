@@ -1,13 +1,17 @@
 ;;; test.el --- tests  -*- lexical-binding: t -*-
 ;;; Commentary:
-;;; Nothing special.
+;;; ERT tests for languagetool.el
+;;; Run with: eldev test
+;;; Coverage: eldev test --undercover
 
 ;;; Code:
 
 (require 'ert)
 
 ;; Load LanguageTool modules in correct order
-(add-to-list 'load-path ".")
+;; (Eldev handles load-path automatically, but keep for standalone use)
+(unless (featurep 'eldev)
+  (add-to-list 'load-path "."))
 (require 'languagetool-core)
 (require 'languagetool-server)
 (require 'languagetool-issue)
