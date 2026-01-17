@@ -4,31 +4,47 @@
     src="https://user-images.githubusercontent.com/30298743/151288287-82b50b4e-aab6-40e6-9bae-fd55161c72ba.svg"
     alt="languagetool.el logo" />
 </p>
-<h1 align="center">languagetool.el</h1>
+<h1 align="center">languagetool.el (fork)</h1>
 <p align="center">
   <img
     src="https://user-images.githubusercontent.com/30298743/151289330-d298348c-5052-446f-9098-c888df631b51.png"
     alt="languagetool.el in action" />
 </p>
-<hr />
-<p align="center">
-  <a href="https://melpa.org/#/languagetool">
-    <img
-      src="https://melpa.org/packages/languagetool-badge.svg"
-      alt="MELPA Version" />
-  </a>
-  <a href="https://stable.melpa.org/#/languagetool">
-    <img
-      src="https://stable.melpa.org/packages/languagetool-badge.svg"
-      alt="MELPA Stable Version" />
-  </a>
-  <a href="https://github.com/PillFall/Emacs-LanguageTool.el/actions/workflows/byte-compile.yml">
-    <img
-      src="https://github.com/PillFall/Emacs-LanguageTool.el/workflows/build/badge.svg"
-      alt="CI Status" />
-  </a>
-</p>
 #+END_HTML
+
+** About this Fork
+
+This is a fork of [[https://github.com/PillFall/languagetool.el][PillFall/languagetool.el]]. I created this fork to add
+several features that I needed for my workflow. *This fork does not maintain
+backward compatibility* with the original package.
+
+*** Changes from the Original
+
+The main changes are documented in [[https://github.com/PillFall/languagetool.el/issues/28][this issue]]. Here is a summary:
+
+1. *Targeted Correction*: Only correct the lines around the point or the visible
+   part of the buffer, to avoid sending large requests to LanguageTool. See
+   ~languagetool-server-check-visible-text~, ~languagetool-server-lines-before~,
+   and ~languagetool-server-lines-after~.
+
+2. *Caching System*: Implements a cache mechanism to prevent redundant requests
+   when no changes occur between corrections.
+
+3. *Customizable Keys*: The correction key bindings are now user-configurable
+   via ~languagetool-correction-keys~.
+
+4. *Global File for Ignored Rules*: Ignored rules are stored in a global JSON file
+   rather than per-file (the rules are per file).
+
+5. *Global Word Ignoring*: Ignored words are saved to a global dictionary file
+   instead of keeping them local to individual files (the words are ignored globally).
+
+6. *Custom Predicates*: The ~languagetool-core-correct-predicates~ variable
+   allows users to define custom rules for word filtering (e.g., ignoring time
+   formats like "10h30").
+
+7. *Forward Correction*: The ~languagetool-correct-buffer-forward~ function
+   processes corrections from buffer start instead of end.
 
 ** Introduction
 
@@ -74,34 +90,57 @@ the ~/usr/share/languagetool~ and ~/usr/share/java/languagetool~ directories.
 
 *** Obtaining the package
 
-You can install the package using the MELPA repository or via ~use-package~.
+You can install this fork using ~straight.el~ or by cloning the repository.
 
-In case you use the latter and get the LanguageTool Zip, one default
-configuration, enabling all current features, would be:
+Here is an example configuration using ~use-package~ with ~straight.el~:
 
 #+BEGIN_SRC elisp
+;; Custom predicate to ignore time formats like "10h30"
+(defun languagetool-ignore-time-format-p (word)
+  "Return t if WORD is a valid time format like '10h10', '23h59', etc."
+  (when (string-match "^\\([0-9]\\{1,2\\}\\)[hH]\\([0-9]\\{2\\}\\)$" word)
+    (let ((hours (string-to-number (match-string 1 word)))
+          (minutes (string-to-number (match-string 2 word))))
+      (and (<= 0 hours 23) (<= 0 minutes 59)))))
+
 (use-package languagetool
-  :ensure t
-  :defer t
-  :commands (languagetool-check
-             languagetool-clear-suggestions
+  :demand
+  :ensure nil
+  :straight (:host github
+             :repo "dionisos2/languagetool.el"
+             :branch "dionisos")
+  :commands (languagetool-clear-suggestions
              languagetool-correct-at-point
              languagetool-correct-buffer
+             languagetool-correct-buffer-forward
              languagetool-set-language
-             languagetool-server-mode
-             languagetool-server-start
-             languagetool-server-stop)
+             languagetool-server-mode)
+  :hook
+  (text-mode-hook . languagetool-server-mode)
+  (org-mode-hook . languagetool-server-mode)
+  (markdown-mode-hook . languagetool-server-mode)
+  :bind (("C-c s" . languagetool-correct-at-point)
+         ("C-c C-s" . languagetool-correct-buffer-forward)
+         ("C-<f10>" . languagetool-server-mode)
+         ("<f10>" . languagetool-server-check-region))
+  :custom
+  (languagetool-correction-language "fr")
+  (languagetool-java-arguments '("-dfile.encoding=utf-8"))
+  (languagetool-server-url "http://localhost")
+  (languagetool-server-port 8081)
+  (languagetool-hint-idle-delay 0.5)
+  (languagetool-server-check-delay 1.5)
+  (languagetool-server-lines-before 2)
+  (languagetool-server-lines-after 2)
+  (languagetool-correction-keys (string-to-vector "auienrstdoygov123456789"))
+  (languagetool-server-check-visible-text t)
   :config
-  (setq languagetool-java-arguments '("-Dfile.encoding=UTF-8")
-        languagetool-console-command "~/.languagetool/languagetool-commandline.jar"
-        languagetool-server-command "~/.languagetool/languagetool-server.jar"))
+  (add-to-list 'languagetool-core-correct-predicates #'languagetool-ignore-time-format-p))
 #+END_SRC
 
 If you want to install it from source, you can clone this repository and do all
-the configuration manually (create a ~package.el~, generate ~autoloads.el~,
-etc.). Right now, there are no installation steps following this approach, so
-you'll need to know what you are doing, but there is a handy makefile which byte
-compiles all the elisp files.
+the configuration manually. There is a handy makefile which byte compiles all
+the elisp files.
 
 *** Configuring the package
 
