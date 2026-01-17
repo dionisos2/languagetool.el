@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 echo "Running LanguageTool ERT test suite..."
-emacs -batch -l test.el -f ert-run-tests-batch-and-exit
+emacs -Q -batch -l test.el -f ert-run-tests-batch-and-exit

@@ -1,6 +1,6 @@
 ;;; languagetool.el --- LanguageTool integration for grammar and spell check -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2020-2022  Joar Buitrago
+;; Copyright (C) 2020-2022	Joar Buitrago
 
 ;; Author: Joar Buitrago <jebuitragoc@unal.edu.co>
 ;; Keywords: grammar text docs tools convenience checker
@@ -15,11 +15,11 @@
 
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with this program.	 If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -27,7 +27,7 @@
 ;; tool in Emacs.
 
 ;; languagetool is a utility tool to check and show suggestions made
-;; by LanguageTool in the buffer.  Also has real time suggestions made
+;; by LanguageTool in the buffer.	 Also has real time suggestions made
 ;; by the LanguageTool Server.
 
 ;; For using this package you need Java and LanguageTool jar binaries
@@ -42,43 +42,43 @@
 ;; Group definition:
 
 (defgroup languagetool nil
-  "Grammar and spell checking with LanguageTool."
-  :tag "LanguageTool"
-  :prefix "languagetool-"
-  :group 'applications)
+	"Grammar and spell checking with LanguageTool."
+	:tag "LanguageTool"
+	:prefix "languagetool-"
+	:group 'applications)
 
 ;; Function definitions:
 
 ;;;###autoload
 (defun languagetool-set-language (lang)
-  "Set LanguageTool correction language to LANG."
-  (interactive
-   (list (read-string "LanguageTool new language: "
-                      (cdr (assoc languagetool-correction-language languagetool-core-languages))
-                      languagetool-correction-language-history
-                      (let (languages-choices)
-                        (dolist (language
-                                 languagetool-core-languages
-                                 (reverse languages-choices))
-                          (push (cdr language) languages-choices))))))
-  (setq languagetool-correction-language (or (car (rassoc lang languagetool-core-languages))
-                                             lang)))
+	"Set LanguageTool correction language to LANG."
+	(interactive
+	 (list (read-string "LanguageTool new language: "
+					(cdr (assoc languagetool-correction-language languagetool-core-languages))
+					languagetool-correction-language-history
+					(let (languages-choices)
+			(dolist (language
+				 languagetool-core-languages
+				 (reverse languages-choices))
+				(push (cdr language) languages-choices))))))
+	(setq languagetool-correction-language (or (car (rassoc lang languagetool-core-languages))
+							 lang)))
 
 ;;;###autoload
 (defun languagetool-clear-suggestions ()
-  "Clear all the buffer suggestions.
+	"Clear all the buffer suggestions.
 
 If `languagetool-server-mode' is active, it would rise an error,
 as you are not suppose to call this function."
-  (interactive)
-  (when languagetool-server-mode
-    (error "Do not use this function in server mode
+	(interactive)
+	(when languagetool-server-mode
+		(error "Do not use this function in server mode
 If you want to clear the suggestions turn off the server mode"))
-  (languagetool-core-clear-buffer))
+	(languagetool-core-clear-buffer))
 
 ;;;###autoload
 (defun languagetool-check (begin end)
-  "Correct the current buffer and highlight errors.
+	"Correct the current buffer and highlight errors.
 
 If region is selected before calling this function, that would be
 the region passed as an argument. The region is delimited by
@@ -88,27 +88,27 @@ If `languagetool-server-mode' is active, send a request to the
 server and ends. The parameters BEGIN and END did not make any
 difference, as in this mode, the whole buffer needs to be
 checked."
-  (interactive
-   (if (region-active-p)
-       (list (region-beginning) (region-end))
-     (list (point-min) (point-max))))
-  (if languagetool-server-mode
-      (languagetool-server-send-request)
-    (languagetool-console-check begin end)))
+	(interactive
+	 (if (region-active-p)
+			 (list (region-beginning) (region-end))
+		 (list (point-min) (point-max))))
+	(if languagetool-server-mode
+			(languagetool-server-send-request)
+		(languagetool-console-check begin end)))
 
 ;;;###autoload
 (defun languagetool-correct-at-point ()
-  "Pops up transient buffer to do correction at point."
-  (interactive)
-  (when languagetool-server-mode
-    (setq languagetool-server-correcting-p t))
-  (languagetool-correction-at-point)
-  (when languagetool-server-mode
-    (setq languagetool-server-correcting-p nil)))
+	"Pops up transient buffer to do correction at point."
+	(interactive)
+	(when languagetool-server-mode
+		(setq languagetool-server-correcting-p t))
+	(languagetool-correction-at-point)
+	(when languagetool-server-mode
+		(setq languagetool-server-correcting-p nil)))
 
 ;;;###autoload
 (defun languagetool-correct-buffer (&optional reverse)
-  "Correct all LanguageTool errors in the buffer.
+	"Correct all LanguageTool errors in the buffer.
 
 If REVERSE is non-nil (default), corrections start from the last error and move backward.
 If REVERSE is nil, corrections start from the first error and move forward.
@@ -116,28 +116,28 @@ If REVERSE is nil, corrections start from the first error and move forward.
 This function pops up a transient buffer for each correction.
 
 If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p' during correction."
-  (interactive "P")
-  (when languagetool-server-mode
-    (setq languagetool-server-correcting-p t))
-  (condition-case err
-      (save-excursion
-        (let* ((overlays (overlays-in (point-min) (point-max)))
-               (sorted (sort overlays
-                             (lambda (a b)
-                               (if reverse
-                                   (< (overlay-start a) (overlay-start b))
-                                 (> (overlay-start a) (overlay-start b)))))))
-          (dolist (ov sorted)
-            (when (and (overlay-get ov 'languagetool-message)
-                       (overlay-start ov))
-              (goto-char (overlay-start ov))
-              (languagetool-correction-at-point)))))
-    ((quit error)
-     (when languagetool-server-mode
-       (setq languagetool-server-correcting-p nil))
-     (error "%s" (error-message-string err))))
-  (when languagetool-server-mode
-    (setq languagetool-server-correcting-p nil)))
+	(interactive "P")
+	(when languagetool-server-mode
+		(setq languagetool-server-correcting-p t))
+	(condition-case err
+			(save-excursion
+	(let* ((overlays (overlays-in (point-min) (point-max)))
+				 (sorted (sort overlays
+					 (lambda (a b)
+						 (if reverse
+					 (< (overlay-start a) (overlay-start b))
+				 (> (overlay-start a) (overlay-start b)))))))
+		(dolist (ov sorted)
+			(when (and (overlay-get ov 'languagetool-message)
+					 (overlay-start ov))
+				(goto-char (overlay-start ov))
+				(languagetool-correction-at-point)))))
+		((quit error)
+		 (when languagetool-server-mode
+			 (setq languagetool-server-correcting-p nil))
+		 (error "%s" (error-message-string err))))
+	(when languagetool-server-mode
+		(setq languagetool-server-correcting-p nil)))
 
 (defun languagetool-correct-buffer-forward ()
 	(interactive)

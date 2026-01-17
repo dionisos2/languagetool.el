@@ -15,11 +15,11 @@
 
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with this program.	 If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -30,20 +30,20 @@
 ;; Group definition:
 
 (defgroup languagetool-java nil
-  "LanguageTool Java related configuration."
-  :tag "Java"
-  :prefix "languagetool-java-"
-  :group 'languagetool)
+	"LanguageTool Java related configuration."
+	:tag "Java"
+	:prefix "languagetool-java-"
+	:group 'languagetool)
 
 ;; Variable definitions:
 
 (defcustom languagetool-java-bin (executable-find "java")
-  "Java executable path."
-  :group 'languagetool-java
-  :type 'file)
+	"Java executable path."
+	:group 'languagetool-java
+	:type 'file)
 
 (defcustom languagetool-java-arguments nil
-  "Java extra arguments.
+	"Java extra arguments.
 
 Described at http://wiki.languagetool.org/command-line-options,
 recommends to use:
@@ -54,33 +54,33 @@ When using LanguageTool via it classes this variable should be
 set to:
 
 \(setq `languagetool-java-arguments'
-      \\='(\"-Dfile.encoding=UTF-8\"
-        \"-cp\"
-        \"/path/to/classes:/path/to/classes\"))
+			\\='(\"-Dfile.encoding=UTF-8\"
+	\"-cp\"
+	\"/path/to/classes:/path/to/classes\"))
 
 For example to use in Arch Linux (with pacman dependency):
 
 \(setq `languagetool-java-arguments'
-      \\='(\"-Dfile.encoding=UTF-8\"
-        \"-cp\"
-        \"/usr/share/languagetool:/usr/share/java/languagetool/*\"))"
-  :group 'languagetool-java
-  :type '(choice
-          (const nil)
-          (repeat string)))
+			\\='(\"-Dfile.encoding=UTF-8\"
+	\"-cp\"
+	\"/usr/share/languagetool:/usr/share/java/languagetool/*\"))"
+	:group 'languagetool-java
+	:type '(choice
+		(const nil)
+		(repeat string)))
 
 ;; Function definitions:
 
 (defun languagetool-java-parse-arguments ()
-  "Return Java parsed arguments as a list."
-  (unless (listp languagetool-java-arguments)
-    (error "LanguageTool Java Arguments must be a list of strings"))
+	"Return Java parsed arguments as a list."
+	(unless (listp languagetool-java-arguments)
+		(error "LanguageTool Java Arguments must be a list of strings"))
 
-  (let (arguments)
+	(let (arguments)
 
-    (push languagetool-java-arguments arguments)
+		(push languagetool-java-arguments arguments)
 
-    (flatten-tree (reverse arguments))))
+		(flatten-tree (reverse arguments))))
 
 (provide 'languagetool-java)
 

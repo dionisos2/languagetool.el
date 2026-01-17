@@ -19,8 +19,8 @@
 ;; Run with: eldev test --undercover
 (eldev-use-plugin 'undercover)
 
-;; Byte-compilation settings - exclude test.el from compilation, not from testing
-(setf eldev-standard-excludes '(".dir-locals.el"))
+;; Byte-compilation settings - exclude non-project files
+(setf eldev-standard-excludes '(".dir-locals.el" ".eldev" "./eldev"))
 
 ;; Linting configuration
 (setf eldev-lint-default '(elisp))
