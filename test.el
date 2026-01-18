@@ -249,6 +249,54 @@
 			(when (file-directory-p temp-dir)
 	(delete-directory temp-dir t)))))
 
+(ert-deftest languagetool-test-update-rule-normalizes-repeated-words-id ()
+	"Test that repeated words rules are stored with base ID only.
+LanguageTool generates dynamic rule IDs like FR_REPEATEDWORDS_VRAIMENT
+but only accepts the base ID FR_REPEATEDWORDS in disabledRules."
+	(let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+		 (languagetool-dict-directory temp-dir)
+		 (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir))
+		 (file "/tmp/test-repeated.txt"))
+		(unwind-protect
+	(progn
+		;; Add a repeated words rule with dynamic suffix
+		(languagetool-update-rule-for-file file "FR_REPEATEDWORDS_VRAIMENT")
+		;; Should be stored as base ID only
+		(should (member "FR_REPEATEDWORDS" (languagetool-get-rules-for-file file)))
+		;; The full dynamic ID should NOT be stored
+		(should-not (member "FR_REPEATEDWORDS_VRAIMENT" (languagetool-get-rules-for-file file))))
+			;; Cleanup
+			(when (file-exists-p languagetool-rules-json-path)
+	(delete-file languagetool-rules-json-path))
+			(when (file-directory-p temp-dir)
+	(delete-directory temp-dir t)))))
+
+(ert-deftest languagetool-test-rules-json-is-pretty-printed ()
+	"Test that the rules JSON file is formatted with pretty printing."
+	(let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+		 (languagetool-dict-directory temp-dir)
+		 (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir))
+		 (file "/tmp/test-pretty.txt"))
+		(unwind-protect
+	(progn
+		;; Add a rule to create the JSON file
+		(languagetool-update-rule-for-file file "RULE_TEST")
+		;; Read the raw file content
+		(let ((content (with-temp-buffer
+						 (insert-file-contents languagetool-rules-json-path)
+						 (buffer-string)))
+				(expected (with-temp-buffer
+							 (insert (json-encode `((,file . ("RULE_TEST")))))
+							 (json-pretty-print-buffer)
+							 (buffer-string))))
+			;; Content should match pretty printed version
+			(should (string= content expected))))
+			;; Cleanup
+			(when (file-exists-p languagetool-rules-json-path)
+	(delete-file languagetool-rules-json-path))
+			(when (file-directory-p temp-dir)
+	(delete-directory temp-dir t)))))
+
 (ert-deftest languagetool-test-update-and-get-rules-for-current-buffer ()
 	"Test updating and getting rules for the current buffer's file."
 	(let* ((temp-dir (make-temp-file "lt-rules-dir" t))

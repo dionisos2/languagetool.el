@@ -351,7 +351,8 @@ This means the word should be ignored and not corrected."
 							 (push (cons k v) alist))
 						 rules)
 		(setq alist (nreverse alist))
-		(let ((json-string (json-encode alist)))
+		(let* ((json-encoding-pretty-print t)
+					 (json-string (json-encode alist)))
 			(with-temp-file languagetool-rules-json-path
 				(insert json-string)))))
 
@@ -360,15 +361,24 @@ This means the word should be ignored and not corrected."
 	(let ((rules (languagetool-load-rules-json)))
 		(gethash file rules '())))
 
+(defun languagetool-normalize-rule-id (rule-id)
+	"Normalize RULE-ID by extracting the base ID for dynamic rules.
+For example, FR_REPEATEDWORDS_VRAIMENT becomes FR_REPEATEDWORDS."
+	(if (string-match "^\\([A-Z]+_REPEATEDWORDS\\)_" rule-id)
+			(match-string 1 rule-id)
+		rule-id))
+
 (defun languagetool-update-rule-for-file (file rule-id &optional remove)
 	"Add or remove a rule for FILE in the LanguageTool rules JSON.
-If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID."
-	(let* ((rules (languagetool-load-rules-json))
+If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID.
+RULE-ID is normalized to handle dynamic rule IDs like FR_REPEATEDWORDS_*."
+	(let* ((normalized-id (languagetool-normalize-rule-id rule-id))
+				 (rules (languagetool-load-rules-json))
 				 (file-rules (gethash file rules '())))
 		(if remove
-				(setq file-rules (remove rule-id file-rules))
-			(unless (member rule-id file-rules)
-				(push rule-id file-rules)))
+				(setq file-rules (remove normalized-id file-rules))
+			(unless (member normalized-id file-rules)
+				(push normalized-id file-rules)))
 		(puthash file file-rules rules)
 		(languagetool-save-rules-json rules)))
 
