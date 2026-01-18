@@ -619,6 +619,22 @@ shared the same global function."
 		(kill-buffer response-buffer)))))
 			(kill-buffer test-buffer))))
 
+(ert-deftest languagetool-test-empty-buffer-no-request ()
+	"Test that empty buffer does not send a request to LanguageTool.
+Fix for bug: url-build-query-string on empty text produces 'text&language=fr'
+instead of 'text=&language=fr', causing LanguageTool server error 400.
+Solution: skip request entirely when text is empty."
+	(let ((request-sent nil))
+		(with-temp-buffer
+			;; Empty buffer
+			(setq-local languagetool-server-last-request 0)
+			;; Mock url-retrieve to detect if request is sent
+			(cl-letf (((symbol-function 'url-retrieve)
+				 (lambda (&rest _args) (setq request-sent t))))
+	(languagetool-server-send-request (current-buffer) 1 1)
+	;; No request should be sent for empty buffer
+	(should-not request-sent)))))
+
 ;;; Tests for timer accumulation fix
 
 (ert-deftest languagetool-test-timer-not-duplicated ()

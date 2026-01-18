@@ -505,19 +505,22 @@ new check if the relevant region or text has changed."
 
 (defun languagetool-server-send-request (buffer start end)
 	"Send a request to the server for BUFFER and parse the output given.
-START and END define the region to check."
+START and END define the region to check.
+Does nothing if the region is empty."
 	(with-current-buffer buffer
-		(message (concat "Send request to languagetool: " (buffer-name (current-buffer))))
 		(let* ((region-start (or start (point-min)))
-					 (region-end (or end (point-max)))
-					 (url-request-method "POST")
-					 (url-request-data (url-build-query-string (languagetool-server-parse-request buffer region-start region-end)))
-					 (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded"))))
-			(url-retrieve
-			 (url-encode-url (format "%s:%d/v2/check" languagetool-server-url languagetool-server-port))
-			 #'languagetool-server-highlight-matches
-			 (list buffer region-start languagetool-server-last-request)
-			 t))))
+					 (region-end (or end (point-max))))
+			;; Skip request if text is empty
+			(when (< region-start region-end)
+				(message (concat "Send request to languagetool: " (buffer-name (current-buffer))))
+				(let* ((url-request-method "POST")
+							 (url-request-data (url-build-query-string (languagetool-server-parse-request buffer region-start region-end)))
+							 (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded"))))
+					(url-retrieve
+					 (url-encode-url (format "%s:%d/v2/check" languagetool-server-url languagetool-server-port))
+					 #'languagetool-server-highlight-matches
+					 (list buffer region-start languagetool-server-last-request)
+					 t))))))
 
 (defun languagetool-server--parse-response ()
 	"Parse JSON response from current HTTP response buffer.
