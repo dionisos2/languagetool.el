@@ -88,16 +88,23 @@ Get the information about corrections from OVERLAY."
 											"]: Quit\n"))))
 
 (defun languagetool-correction-add-word (word)
-	"Append WORD to the personal dictionary file and reload the dictionary."
-	(let ((dict-file (languagetool-core--dict-file)))
+	"Append WORD to the personal dictionary file and reload the dictionary.
+WORD is trimmed of leading and trailing whitespace before being added.
+If WORD already exists in the dictionary, it is not added again."
+	(let ((dict-file (languagetool-core--dict-file))
+				(trimmed-word (string-trim word)))
 		(with-temp-buffer
 			(when (file-exists-p dict-file)
 				(insert-file-contents dict-file))
-			(goto-char (point-max))
-			(unless (or (bobp) (looking-back "\n" 1))
-				(insert "\n"))
-			(insert word "\n")
-			(write-region (point-min) (point-max) dict-file))
+			;; Check if word already exists (as a complete line)
+			(goto-char (point-min))
+			(unless (re-search-forward (concat "^" (regexp-quote trimmed-word) "$") nil t)
+				;; Word not found, add it
+				(goto-char (point-max))
+				(unless (or (bobp) (looking-back "\n" 1))
+					(insert "\n"))
+				(insert trimmed-word "\n")
+				(write-region (point-min) (point-max) dict-file)))
 		;; Reload dictionary list
 		(languagetool-core-load-dict-file)))
 
