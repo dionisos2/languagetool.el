@@ -751,4 +751,52 @@ Solution: skip request entirely when text is empty."
 			(should (> (length overlays) 0))
 			(should (overlay-get (car overlays) 'languagetool-message)))))
 
+(ert-deftest languagetool-test-correction-add-word-no-duplicate ()
+	"Test that languagetool-correction-add-word does not add duplicate words."
+	(let* ((languagetool-correction-language "fr")
+		 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+		 (dict-file (languagetool-core--dict-file)))
+		(unwind-protect
+	(progn
+		;; Add the word twice
+		(languagetool-correction-add-word "testword")
+		(languagetool-correction-add-word "testword")
+		;; Read the file and count occurrences
+		(let ((content (with-temp-buffer
+						 (insert-file-contents dict-file)
+						 (buffer-string))))
+			;; The word should appear exactly once
+			(should (= 1 (with-temp-buffer
+						 (insert content)
+						 (goto-char (point-min))
+						 (count-matches "^testword$"))))))
+			;; Cleanup
+			(when (file-exists-p dict-file)
+	(delete-file dict-file))
+			(when (file-directory-p languagetool-dict-directory)
+	(delete-directory languagetool-dict-directory t)))))
+
+(ert-deftest languagetool-test-correction-add-word-trims-whitespace ()
+	"Test that languagetool-correction-add-word trims whitespace around words."
+	(let* ((languagetool-correction-language "fr")
+		 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+		 (dict-file (languagetool-core--dict-file)))
+		(unwind-protect
+	(progn
+		;; Add a word with surrounding whitespace
+		(languagetool-correction-add-word "  spacedword  ")
+		;; Read the file
+		(let ((content (with-temp-buffer
+						 (insert-file-contents dict-file)
+						 (buffer-string))))
+			;; The word should be trimmed (no spaces)
+			(should (string-match-p "^spacedword$" content))
+			;; There should be no line with spaces
+			(should-not (string-match-p "^  spacedword  $" content))))
+			;; Cleanup
+			(when (file-exists-p dict-file)
+	(delete-file dict-file))
+			(when (file-directory-p languagetool-dict-directory)
+	(delete-directory languagetool-dict-directory t)))))
+
 ;; test.el ends here
