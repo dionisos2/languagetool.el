@@ -475,14 +475,16 @@ content has changed."
 (defun languagetool-server-check-region (&optional buffer)
 	"Check the currently visible text region for grammar issues in BUFFER."
 	(interactive)
-	(with-current-buffer (or buffer (current-buffer))
-		(when languagetool-server-mode
-			(let* ((region (languagetool-server-get-region (current-buffer)))
-						 (start (car region))
-						 (end (cdr region)))
-				(when (and start end)
-					(languagetool-server-send-request (current-buffer) start end)))
-			(languagetool-server-update-cache (current-buffer)))))
+	(let ((buf (or buffer (current-buffer))))
+		(when (buffer-live-p buf)
+			(with-current-buffer buf
+				(when languagetool-server-mode
+					(let* ((region (languagetool-server-get-region (current-buffer)))
+								 (start (car region))
+								 (end (cdr region)))
+						(when (and start end)
+							(languagetool-server-send-request (current-buffer) start end)))
+					(languagetool-server-update-cache (current-buffer)))))))
 
 (defun languagetool-server-should-check (&rest _args)
 	"Schedule a LanguageTool check if the buffer content has changed.

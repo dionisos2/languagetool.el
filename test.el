@@ -683,6 +683,20 @@ Solution: skip request entirely when text is empty."
 	;; No request should be sent for empty buffer
 	(should-not request-sent)))))
 
+(ert-deftest languagetool-test-check-region-with-killed-buffer ()
+	"Test that languagetool-server-check-region handles killed buffers gracefully.
+Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buffer' error."
+	(let ((test-buffer (generate-new-buffer "*test-killed-buffer*")))
+		;; Kill the buffer before calling check-region
+		(kill-buffer test-buffer)
+		;; This should NOT error
+		(should-not
+		 (condition-case err
+				 (progn
+		 (languagetool-server-check-region test-buffer)
+		 nil)
+			 (error err)))))
+
 ;;; Tests for timer accumulation fix
 
 (ert-deftest languagetool-test-timer-not-duplicated ()
