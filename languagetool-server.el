@@ -116,6 +116,13 @@ due to scrolling or window resizing.")
 Each buffer gets its own closure that captures its buffer reference,
 allowing proper cleanup when the mode is disabled.")
 
+(defvar-local languagetool-server--status 'idle
+	"Current status of LanguageTool checking.
+Possible values: `idle', `checking', `done'.")
+
+(defvar-local languagetool-server--error-count 0
+	"Number of errors found in the last check.")
+
 (defun languagetool-server-window-start (buffer)
 	"Return the window start position for BUFFER, or nil if not displayed."
 	(with-current-buffer buffer
@@ -186,11 +193,20 @@ from hooks later.  Each buffer gets its own unique closure."
 	;; (add-hook 'post-command-hook (languagetool-server-create-should-check-closure) nil t)
 	)
 
+(defun languagetool-server--mode-line-status ()
+	"Return the mode-line string for LanguageTool status."
+	(pcase languagetool-server--status
+		('checking " LT⟳")
+		('done (if (> languagetool-server--error-count 0)
+							 (format " LT:%d" languagetool-server--error-count)
+						 " LT✓"))
+		(_ " LT")))
+
 ;;;###autoload
 (define-minor-mode languagetool-server-mode
 	"Toggle LanguageTool issue highlighting."
 	:group 'languagetool-server
-	:lighter " LT"
+	:lighter (:eval (languagetool-server--mode-line-status))
 	(if languagetool-server-mode
 			(languagetool-server-mode-on)
 		(languagetool-server-mode-off)))
@@ -366,8 +382,7 @@ of seconds specified in `languagetool-server-max-timeout'."
 																languagetool-server-max-timeout)
 						(when (/= (symbol-value 'url-http-response-status) 200)
 							(error "Not successful response"))
-						(setq languagetool-server-open-communication-p t)
-						(message "LanguageTool Server communication is up...")))
+						(setq languagetool-server-open-communication-p t)))
 			(error
 			 (languagetool-server-mode -1)
 			 (error "LanguageTool Server cannot communicate with server")))
@@ -514,7 +529,8 @@ Does nothing if the region is empty."
 					 (region-end (or end (point-max))))
 			;; Skip request if text is empty
 			(when (< region-start region-end)
-				(message (concat "Send request to languagetool: " (buffer-name (current-buffer))))
+				(setq languagetool-server--status 'checking)
+				(force-mode-line-update)
 				(let* ((url-request-method "POST")
 							 (url-request-data (url-build-query-string (languagetool-server-parse-request buffer region-start region-end)))
 							 (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded"))))
@@ -574,14 +590,16 @@ LAST-REQUEST is used to verify this is still the current request."
 									 (buffer-live-p checking-buffer)
 									 (not (buffer-local-value 'languagetool-server-correcting-p
 																						checking-buffer)))
-					(message "languagetool-server-highlight-matches: %s"
-									 (buffer-name checking-buffer))
 					(when (/= (symbol-value 'url-http-response-status) 200)
 						(error "LanguageTool Server closed"))
 					(when-let ((json-parsed (languagetool-server--parse-response)))
 						(with-current-buffer checking-buffer
 							(save-excursion
-								(languagetool-server--apply-corrections json-parsed region-start)))))
+								(languagetool-server--apply-corrections json-parsed region-start))
+							(setq languagetool-server--error-count
+										(length (alist-get 'matches json-parsed)))
+							(setq languagetool-server--status 'done)
+							(force-mode-line-update))))
 			(when (buffer-live-p response-buffer)
 				(kill-buffer response-buffer)))))
 

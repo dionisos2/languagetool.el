@@ -861,4 +861,58 @@ Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buff
 			(when (file-directory-p languagetool-dict-directory)
 	(delete-directory languagetool-dict-directory t)))))
 
+;;; Tests for mode-line status indicator
+
+(ert-deftest languagetool-test-mode-line-status-idle ()
+	"Test mode-line status returns correct string for idle state."
+	(with-temp-buffer
+		(setq-local languagetool-server--status 'idle)
+		(setq-local languagetool-server--error-count 0)
+		(should (string= (languagetool-server--mode-line-status) " LT"))))
+
+(ert-deftest languagetool-test-mode-line-status-checking ()
+	"Test mode-line status returns correct string for checking state."
+	(with-temp-buffer
+		(setq-local languagetool-server--status 'checking)
+		(setq-local languagetool-server--error-count 0)
+		(should (string= (languagetool-server--mode-line-status) " LT⟳"))))
+
+(ert-deftest languagetool-test-mode-line-status-done-no-errors ()
+	"Test mode-line status returns correct string when done with no errors."
+	(with-temp-buffer
+		(setq-local languagetool-server--status 'done)
+		(setq-local languagetool-server--error-count 0)
+		(should (string= (languagetool-server--mode-line-status) " LT✓"))))
+
+(ert-deftest languagetool-test-mode-line-status-done-with-errors ()
+	"Test mode-line status returns correct string when done with errors."
+	(with-temp-buffer
+		(setq-local languagetool-server--status 'done)
+		(setq-local languagetool-server--error-count 5)
+		(should (string= (languagetool-server--mode-line-status) " LT:5"))))
+
+(ert-deftest languagetool-test-mode-line-status-is-buffer-local ()
+	"Test that mode-line status variables are buffer-local."
+	(let ((buffer-a (generate-new-buffer "*test-status-a*"))
+				(buffer-b (generate-new-buffer "*test-status-b*")))
+		(unwind-protect
+				(progn
+					(with-current-buffer buffer-a
+						(setq-local languagetool-server--status 'checking)
+						(setq-local languagetool-server--error-count 3))
+					(with-current-buffer buffer-b
+						(setq-local languagetool-server--status 'done)
+						(setq-local languagetool-server--error-count 0))
+					;; Each buffer should have its own status
+					(should (eq (buffer-local-value 'languagetool-server--status buffer-a)
+											'checking))
+					(should (eq (buffer-local-value 'languagetool-server--status buffer-b)
+											'done))
+					(should (= (buffer-local-value 'languagetool-server--error-count buffer-a)
+										 3))
+					(should (= (buffer-local-value 'languagetool-server--error-count buffer-b)
+										 0)))
+			(kill-buffer buffer-a)
+			(kill-buffer buffer-b))))
+
 ;; test.el ends here
