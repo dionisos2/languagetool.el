@@ -301,6 +301,31 @@ Each function should accept a single argument WORD and return t if the word shou
 	(and languagetool-core--dict-word-list
 			 (member word languagetool-core--dict-word-list)))
 
+(defun languagetool-core--normalize-string (s)
+	"Normalize string S for fuzzy comparison.
+Converts to lowercase and removes diacritical marks (accents)."
+	(require 'ucs-normalize)
+	(let ((decomposed (ucs-normalize-NFD-string (downcase s))))
+		(replace-regexp-in-string "[\u0300-\u036f]" "" decomposed)))
+
+(defun languagetool-core-string-distance (s1 s2)
+	"Calculate distance between S1 and S2 for spelling suggestions.
+Compares normalized versions (lowercase, no accents) using `string-distance'."
+	(string-distance (languagetool-core--normalize-string s1)
+									 (languagetool-core--normalize-string s2)))
+
+(defun languagetool-core-find-similar-words (word max-distance)
+	"Find words in the personal dictionary similar to WORD.
+Returns a list of words with normalized distance <= MAX-DISTANCE.
+Comparison ignores case and accents."
+	(when languagetool-core--dict-word-list
+		(let (result)
+			(dolist (dict-word languagetool-core--dict-word-list)
+				(when (<= (languagetool-core-string-distance word dict-word)
+									max-distance)
+					(push dict-word result)))
+			(nreverse result))))
+
 (defun languagetool-core-correct-p (word)
 	"Return t if any predicate in `languagetool-core-correct-predicates' for WORD.
 

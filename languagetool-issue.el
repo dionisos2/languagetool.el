@@ -33,6 +33,8 @@
 
 ;;; Code:
 
+(require 'languagetool-core)
+
 ;; Group definition:
 
 (defgroup languagetool-issue nil
@@ -94,6 +96,22 @@ Each element is a cons cell with the form (ISSUE_TYPE . FACE_NAME)."
 	(or (cdr (assoc issue-type languagetool-issue-face-alist))
 			'languagetool-issue-default))
 
+(defun languagetool-issue--add-dict-suggestions (replacements misspelled-word)
+	"Add personal dictionary suggestions to REPLACEMENTS for MISSPELLED-WORD.
+Returns a new vector with dictionary suggestions appended."
+	(let* ((similar-words (languagetool-core-find-similar-words misspelled-word 2))
+				 (existing-values (mapcar (lambda (r) (alist-get 'value r))
+																	(append replacements nil)))
+				 (new-suggestions nil))
+		;; Filter out words already in replacements
+		(dolist (word similar-words)
+			(unless (member word existing-values)
+				(push `((value . ,word)) new-suggestions)))
+		;; Append new suggestions to existing replacements
+		(if new-suggestions
+				(vconcat replacements (nreverse new-suggestions))
+			replacements)))
+
 (defun languagetool-issue-create-overlay (begin end correction)
 	"Create an overlay for corrections.
 
@@ -105,9 +123,14 @@ and END, parsing CORRECTION as overlay properties."
 					 (message (alist-get 'message correction))
 					 (replacements (alist-get 'replacements correction))
 					 (rule (alist-get 'rule correction))
-					 (issue-type (alist-get 'issueType rule)))
+					 (issue-type (alist-get 'issueType rule))
+					 (misspelled-word (buffer-substring-no-properties begin end)))
 			(when (string= short-message "")
 				(setq short-message message))
+			;; Add dictionary suggestions for misspellings
+			(when (string= issue-type "misspelling")
+				(setq replacements
+							(languagetool-issue--add-dict-suggestions replacements misspelled-word)))
 			(overlay-put ov 'languagetool-short-message short-message)
 			(overlay-put ov 'languagetool-message message)
 			(overlay-put ov 'languagetool-replacements replacements)

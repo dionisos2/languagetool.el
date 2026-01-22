@@ -968,4 +968,84 @@ When the user presses C-g during `languagetool-correct-at-point', the variable
 						(should-not languagetool-server-correcting-p))
 				(delete-overlay ov)))))
 
+;;; Tests for personal dictionary suggestions
+
+(ert-deftest languagetool-test-similar-words-from-dict ()
+	"Test that similar words from personal dictionary are suggested for misspellings.
+When a word is misspelled and a similar word exists in the personal dictionary,
+that word should be added to the replacement suggestions."
+	(let* ((languagetool-correction-language "fr")
+				 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+				 (dict-file (languagetool-core--dict-file)))
+		;; Create a personal dictionary with some words
+		(with-temp-file dict-file
+			(insert "bonjour\nsalut\nmerci\n"))
+		(languagetool-core-load-dict-file)
+		;; Create a correction for a misspelled word "bonjoure"
+		;; that is similar to "bonjour" in the dictionary
+		(with-temp-buffer
+			(insert "bonjoure")
+			(let ((correction '((offset . 0)
+													(length . 8)
+													(message . "Possible spelling mistake")
+													(shortMessage . "Spelling")
+													(replacements . [])
+													(rule . ((id . "MORFOLOGIK_RULE_FR")
+																	 (issueType . "misspelling"))))))
+				;; Create the overlay
+				(languagetool-issue-create-overlay 1 9 correction)
+				;; Get the overlay and check its replacements
+				(let* ((overlays (overlays-in 1 9))
+							 (ov (car overlays))
+							 (replacements (languagetool-core-get-replacements ov)))
+					;; "bonjour" should be in the replacements since it's similar
+					;; to "bonjoure" and exists in the personal dictionary
+					(should (member "bonjour" replacements)))))))
+
+(ert-deftest languagetool-test-string-distance ()
+	"Test the string distance calculation with normalization."
+	;; Same strings should have distance 0
+	(should (= (languagetool-core-string-distance "hello" "hello") 0))
+	;; One character difference
+	(should (= (languagetool-core-string-distance "hello" "hallo") 1))
+	;; Case differences should have distance 0
+	(should (= (languagetool-core-string-distance "Hello" "hello") 0))
+	(should (= (languagetool-core-string-distance "BONJOUR" "bonjour") 0))
+	;; Accent differences should have distance 0
+	(should (= (languagetool-core-string-distance "résumé" "resume") 0))
+	(should (= (languagetool-core-string-distance "café" "cafe") 0))
+	(should (= (languagetool-core-string-distance "naïve" "naive") 0))
+	;; Combined case and accent
+	(should (= (languagetool-core-string-distance "Résumé" "resume") 0))
+	;; Actual spelling difference with accents
+	(should (= (languagetool-core-string-distance "résumé" "resumee") 1)))
+
+(ert-deftest languagetool-test-find-similar-words ()
+	"Test finding similar words from the personal dictionary."
+	(let* ((languagetool-correction-language "fr")
+				 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+				 (dict-file (languagetool-core--dict-file)))
+		;; Create a personal dictionary
+		(with-temp-file dict-file
+			(insert "bonjour\nsalut\nmerci\nordinateur\nrésumé\n"))
+		(languagetool-core-load-dict-file)
+		;; Test finding similar words
+		(let ((similar (languagetool-core-find-similar-words "bonjoure" 2)))
+			;; "bonjour" should be found (distance 1)
+			(should (member "bonjour" similar)))
+		;; Test with higher distance threshold
+		(let ((similar (languagetool-core-find-similar-words "ordnateur" 2)))
+			;; "ordinateur" should be found (distance 1)
+			(should (member "ordinateur" similar)))
+		;; Test case insensitivity - "BONJOUR" should match "bonjour"
+		(let ((similar (languagetool-core-find-similar-words "BONJOUR" 0)))
+			(should (member "bonjour" similar)))
+		;; Test accent insensitivity - "resume" should match "résumé"
+		(let ((similar (languagetool-core-find-similar-words "resume" 0)))
+			(should (member "résumé" similar)))
+		;; Test with word that has no similar matches
+		(let ((similar (languagetool-core-find-similar-words "xyz" 2)))
+			;; No similar words should be found
+			(should (null similar)))))
+
 ;; test.el ends here
