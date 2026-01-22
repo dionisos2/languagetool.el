@@ -193,6 +193,14 @@ from hooks later.  Each buffer gets its own unique closure."
 	;; (add-hook 'post-command-hook (languagetool-server-create-should-check-closure) nil t)
 	)
 
+(defun languagetool-server--count-overlays ()
+	"Count the number of LanguageTool overlays in the current buffer."
+	(let ((count 0))
+		(dolist (ov (overlays-in (point-min) (point-max)))
+			(when (overlay-get ov 'languagetool-message)
+				(cl-incf count)))
+		count))
+
 (defun languagetool-server--mode-line-status ()
 	"Return the mode-line string for LanguageTool status."
 	(pcase languagetool-server--status
@@ -597,7 +605,7 @@ LAST-REQUEST is used to verify this is still the current request."
 							(save-excursion
 								(languagetool-server--apply-corrections json-parsed region-start))
 							(setq languagetool-server--error-count
-										(length (alist-get 'matches json-parsed)))
+										(languagetool-server--count-overlays))
 							(setq languagetool-server--status 'done)
 							(force-mode-line-update))))
 			(when (buffer-live-p response-buffer)

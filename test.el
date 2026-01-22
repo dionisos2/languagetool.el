@@ -915,4 +915,24 @@ Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buff
 			(kill-buffer buffer-a)
 			(kill-buffer buffer-b))))
 
+(ert-deftest languagetool-test-count-overlays ()
+	"Test that languagetool-server--count-overlays counts only LT overlays."
+	(with-temp-buffer
+		(insert "Test text with some words here")
+		;; Create some LanguageTool overlays
+		(let ((ov1 (make-overlay 1 5))
+					(ov2 (make-overlay 10 14))
+					(ov3 (make-overlay 20 25)))
+			(overlay-put ov1 'languagetool-message "Error 1")
+			(overlay-put ov2 'languagetool-message "Error 2")
+			;; ov3 is NOT a languagetool overlay
+			(overlay-put ov3 'other-property "Not LT")
+			(unwind-protect
+					(progn
+						;; Should count only overlays with languagetool-message
+						(should (= (languagetool-server--count-overlays) 2)))
+				(delete-overlay ov1)
+				(delete-overlay ov2)
+				(delete-overlay ov3)))))
+
 ;; test.el ends here
