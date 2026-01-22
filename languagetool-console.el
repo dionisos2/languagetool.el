@@ -197,8 +197,15 @@ The region is delimited by BEGIN and END."
 				(widen)
 				(goto-char (point-max))
 				(backward-sexp)
-				(setq json-parsed (json-read)))
-			(setq languagetool-console-output-parsed json-parsed)))
+				(setq json-parsed
+							(condition-case err
+									(json-read)
+								(json-error
+								 (message "LanguageTool: Failed to parse console output: %s"
+													(error-message-string err))
+								 nil))))
+			(when json-parsed
+				(setq languagetool-console-output-parsed json-parsed))))
 	(pop-mark))
 
 (defun languagetool-console-check (begin end)
@@ -219,7 +226,8 @@ Found no errors.")
 
 (defun languagetool-console-matches-exists-p ()
 	"Return t if issues where found by LanguageTool or nil otherwise."
-	(/= 0 (length (alist-get 'matches languagetool-console-output-parsed))))
+	(when-let ((matches (alist-get 'matches languagetool-console-output-parsed)))
+		(/= 0 (length matches))))
 
 (defun languagetool-console-highlight-matches (begin)
 	"Highlight issues in the buffer.

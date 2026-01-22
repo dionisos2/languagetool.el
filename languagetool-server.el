@@ -189,9 +189,9 @@ from hooks later.  Each buffer gets its own unique closure."
 	(interactive)
 	(set-default 'languagetool-server-check-visible-text nil)
 	(languagetool-server-clear)
-	(add-hook 'after-change-functions (languagetool-server-create-should-check-closure) nil t)
-	;; (add-hook 'post-command-hook (languagetool-server-create-should-check-closure) nil t)
-	)
+	(unless languagetool-server--check-closure
+		(setq languagetool-server--check-closure (languagetool-server-create-should-check-closure)))
+	(add-hook 'after-change-functions languagetool-server--check-closure nil t))
 
 (defun languagetool-server--count-overlays ()
 	"Count the number of LanguageTool overlays in the current buffer."
@@ -373,7 +373,8 @@ It's not recommended to run this function more than once."
 (defun languagetool-server-stop ()
 	"Stops the LanguageTool Server."
 	(interactive)
-	(delete-process languagetool-server-process))
+	(when (process-live-p languagetool-server-process)
+		(delete-process languagetool-server-process)))
 
 (defun languagetool-server-check-for-communication ()
 	"Check if the LanguageTool Server is able to handle requests.
