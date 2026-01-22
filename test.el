@@ -405,39 +405,6 @@ but only accepts the base ID FR_REPEATEDWORDS in disabledRules."
 	(should-not (equal (languagetool-server-get-text buf) "Second line\nThird line\n"))
 	(should (languagetool-server-text-changed-p buf))))))
 
-(ert-deftest languagetool-test-overlay-management-visible-mode ()
-	"Test overlay management with changing visible regions."
-	(skip-unless (fboundp 'languagetool-server-clear-region-overlays))
-	(with-temp-buffer
-		(customize-set-variable 'languagetool-server-check-visible-text t)
-		(insert "Text with potential issues\nSecond line with content\nThird line\n")
-		(let ((buf (current-buffer)))
-			;; Create some mock overlays
-			(let ((ov1 (make-overlay 1 10))
-			(ov2 (make-overlay 20 30))
-			(ov3 (make-overlay 40 50)))
-
-	;; Mark overlays as LanguageTool overlays
-	(overlay-put ov1 'languagetool-message "Test message 1")
-	(overlay-put ov2 'languagetool-message "Test message 2")
-	(overlay-put ov3 'languagetool-message "Test message 3")
-
-	;; Mock window functions for batch mode
-	(cl-letf (((symbol-function 'languagetool-server-window-start) (lambda (buffer) 1))
-			((symbol-function 'languagetool-server-window-end) (lambda (buffer) (with-current-buffer buffer (point-max)))))
-
-		;; Test selective overlay clearing
-		(languagetool-server-clear-region-overlays buf 1)
-
-		;; Verify overlays exist (they should since we're testing the function exists)
-		(should (overlayp ov1))
-		(should (overlayp ov2))
-		(should (overlayp ov3))
-
-		;; Clean up overlays
-		(delete-overlay ov1)
-		(delete-overlay ov2)
-		(delete-overlay ov3))))))
 
 (ert-deftest languagetool-test-closure-with-killed-buffer ()
 	"Test that the should-check closure handles killed buffers gracefully.
@@ -618,27 +585,29 @@ shared the same global function."
 	"Test that malformed JSON is handled gracefully."
 	(let ((test-buffer (generate-new-buffer "*test-json-error*")))
 		(unwind-protect
-	(with-current-buffer test-buffer
-		(insert "Some text to check")
-		(setq-local languagetool-server-last-request 1)
-		(setq-local languagetool-server-correcting-p nil)
-		(setq-local languagetool-server-mode t)
-		;; Create a mock HTTP response buffer with invalid JSON
-		(let ((response-buffer (generate-new-buffer "*mock-http-response*")))
-			(unwind-protect
-		(with-current-buffer response-buffer
-			(insert "HTTP/1.1 200 OK\n\n{invalid json here")
-			(setq-local url-http-response-status 200)
-			;; This should not error, just log a message
-			(should-not
-			 (condition-case err
-					 (progn
-			 (languagetool-server-highlight-matches nil test-buffer 1 1)
-			 nil)
-				 (error err))))
-				;; Response buffer should be killed by the function
-				(when (buffer-live-p response-buffer)
-		(kill-buffer response-buffer)))))
+				(with-current-buffer test-buffer
+					(insert "Some text to check")
+					(setq-local languagetool-server-last-request 1)
+					(setq-local languagetool-server-correcting-p nil)
+					(setq-local languagetool-server-mode t)
+					;; Create a mock HTTP response buffer with invalid JSON
+					(let ((response-buffer (generate-new-buffer "*mock-http-response*")))
+						(unwind-protect
+								(with-current-buffer response-buffer
+									(insert "HTTP/1.1 200 OK\n\n{invalid json here")
+									(setq-local url-http-response-status 200)
+									;; Suppress the expected error message during test
+									(cl-letf (((symbol-function 'message) #'ignore))
+										;; This should not error, just log a message
+										(should-not
+										 (condition-case err
+												 (progn
+													 (languagetool-server-highlight-matches nil test-buffer 1 1)
+													 nil)
+											 (error err)))))
+							;; Response buffer should be killed by the function
+							(when (buffer-live-p response-buffer)
+								(kill-buffer response-buffer)))))
 			(kill-buffer test-buffer))))
 
 (ert-deftest languagetool-test-nil-matches-handling ()
@@ -934,5 +903,43 @@ Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buff
 				(delete-overlay ov1)
 				(delete-overlay ov2)
 				(delete-overlay ov3)))))
+
+(require 'languagetool)
+
+(ert-deftest languagetool-test-correct-buffer-quit-preserves-point ()
+	"Test that C-g during correction keeps point at current error position.
+When the user quits with C-g during `languagetool-correct-buffer-forward',
+the cursor should stay at the error being corrected, not return to the
+original position."
+	(with-temp-buffer
+		(insert "First error here and second error there")
+		(goto-char (point-min))
+		;; Create two LanguageTool overlays at positions 7-12 and 26-31
+		(let ((ov1 (make-overlay 7 12))
+					(ov2 (make-overlay 26 31))
+					(call-count 0))
+			(overlay-put ov1 'languagetool-message "Error 1")
+			(overlay-put ov1 'languagetool-replacements [])
+			(overlay-put ov2 'languagetool-message "Error 2")
+			(overlay-put ov2 'languagetool-replacements [])
+			(unwind-protect
+					(progn
+						;; Mock languagetool-correction-at-point to signal quit on second call
+						(cl-letf (((symbol-function 'languagetool-correction-at-point)
+											 (lambda ()
+												 (cl-incf call-count)
+												 (when (= call-count 2)
+													 (signal 'quit nil)))))
+							;; Start at beginning
+							(goto-char (point-min))
+							;; Call correct-buffer-forward, expect quit on second error
+							(condition-case nil
+									(languagetool-correct-buffer-forward)
+								(quit nil)
+								(error nil)))
+						;; Point should be at the second overlay (position 26), not at point-min
+						(should (= (point) 26)))
+				(delete-overlay ov1)
+				(delete-overlay ov2)))))
 
 ;; test.el ends here

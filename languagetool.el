@@ -117,23 +117,26 @@ If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p'
 	(interactive "P")
 	(when languagetool-server-mode
 		(setq languagetool-server-correcting-p t))
-	(condition-case err
-			(save-excursion
-				(let* ((overlays (overlays-in (point-min) (point-max)))
-							 (sorted (sort overlays
-														 (lambda (a b)
-															 (if reverse
-																	 (< (overlay-start a) (overlay-start b))
-																 (> (overlay-start a) (overlay-start b)))))))
-					(dolist (ov sorted)
-						(when (and (overlay-get ov 'languagetool-message)
-											 (overlay-start ov))
-							(goto-char (overlay-start ov))
-							(languagetool-correction-at-point)))))
-		((quit error)
-		 (when languagetool-server-mode
-			 (setq languagetool-server-correcting-p nil))
-		 (error "%s" (error-message-string err))))
+	(let ((original-point (point)))
+		(condition-case err
+				(progn
+					(let* ((overlays (overlays-in (point-min) (point-max)))
+								 (sorted (sort overlays
+															 (lambda (a b)
+																 (if reverse
+																		 (< (overlay-start a) (overlay-start b))
+																	 (> (overlay-start a) (overlay-start b)))))))
+						(dolist (ov sorted)
+							(when (and (overlay-get ov 'languagetool-message)
+												 (overlay-start ov))
+								(goto-char (overlay-start ov))
+								(languagetool-correction-at-point))))
+					;; Only restore point if completed successfully
+					(goto-char original-point))
+			((quit error)
+			 (when languagetool-server-mode
+				 (setq languagetool-server-correcting-p nil))
+			 (signal (car err) (cdr err)))))
 	(when languagetool-server-mode
 		(setq languagetool-server-correcting-p nil)))
 
