@@ -1048,4 +1048,51 @@ that word should be added to the replacement suggestions."
 			;; No similar words should be found
 			(should (null similar)))))
 
+;;; Tests for correction accepted hook
+
+(ert-deftest languagetool-test-correction-accepted-hook-called ()
+	"Test that the correction accepted hook is called when a correction is applied."
+	(with-temp-buffer
+		(insert "bonjoure")
+		(let ((hook-called nil)
+					(hook-info nil)
+					(ov (make-overlay 1 9)))
+			(overlay-put ov 'languagetool-message "Possible spelling mistake")
+			(overlay-put ov 'languagetool-replacements [((value . "bonjour"))])
+			(overlay-put ov 'languagetool-rule '((id . "MORFOLOGIK_RULE_FR")
+																					 (issueType . "misspelling")))
+			;; Add a hook function to capture the call
+			(let ((languagetool-correction-accepted-functions
+						 (list (lambda (info)
+										 (setq hook-called t)
+										 (setq hook-info info)))))
+				(goto-char 1)
+				;; Apply the first correction (key "1")
+				(languagetool-correction-apply (aref languagetool-correction-keys 0) ov)
+				;; Hook should have been called
+				(should hook-called)
+				;; Check the info passed to the hook
+				(should (equal (plist-get hook-info :original-word) "bonjoure"))
+				(should (equal (plist-get hook-info :replacement) "bonjour"))
+				(should (equal (plist-get hook-info :rule-id) "MORFOLOGIK_RULE_FR"))
+				(should (equal (plist-get hook-info :issue-type) "misspelling"))))))
+
+(ert-deftest languagetool-test-correction-accepted-hook-not-called-on-skip ()
+	"Test that the hook is NOT called when the user skips a correction."
+	(with-temp-buffer
+		(insert "bonjoure")
+		(let ((hook-called nil)
+					(ov (make-overlay 1 9)))
+			(overlay-put ov 'languagetool-message "Possible spelling mistake")
+			(overlay-put ov 'languagetool-replacements [((value . "bonjour"))])
+			(overlay-put ov 'languagetool-rule '((id . "MORFOLOGIK_RULE_FR")
+																					 (issueType . "misspelling")))
+			(let ((languagetool-correction-accepted-functions
+						 (list (lambda (info) (setq hook-called t)))))
+				(goto-char 1)
+				;; Skip the correction with C-s
+				(languagetool-correction-apply ?\C-s ov)
+				;; Hook should NOT have been called
+				(should-not hook-called)))))
+
 ;; test.el ends here

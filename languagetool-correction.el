@@ -40,6 +40,22 @@ Each element should be a character (integer) used to select suggestions."
 	:type '(vector character)
 	:group 'languagetool)
 
+(defvar languagetool-correction-accepted-functions nil
+	"Hook run when a correction suggestion is accepted.
+Each function receives a plist with the following keys:
+  :original-word - the word before correction
+  :replacement   - the correction that was applied
+  :rule-id       - the LanguageTool rule ID (e.g. \"MORFOLOGIK_RULE_FR\")
+  :issue-type    - the type of issue (e.g. \"misspelling\", \"grammar\")
+
+Example use case: automatically add misspelling corrections to abbrev:
+  (add-hook \\='languagetool-correction-accepted-functions
+            (lambda (info)
+              (when (equal (plist-get info :issue-type) \"misspelling\")
+                (define-abbrev global-abbrev-table
+                  (plist-get info :original-word)
+                  (plist-get info :replacement)))))")
+
 ;; Function definitions:
 
 (defun languagetool-correction-parse-message (overlay)
@@ -130,13 +146,25 @@ on OVERLAY."
 	 ((not (cl-position pressed-key languagetool-correction-keys))
 		(error "Key `%c' cannot be used" pressed-key))
 	 (t
-		(let ((size (length (languagetool-core-get-replacements overlay)))
-					(pos (cl-position pressed-key languagetool-correction-keys)))
+		(let* ((size (length (languagetool-core-get-replacements overlay)))
+					 (pos (cl-position pressed-key languagetool-correction-keys))
+					 (original-word (buffer-substring-no-properties
+													 (overlay-start overlay) (overlay-end overlay)))
+					 (replacement (nth pos (languagetool-core-get-replacements overlay)))
+					 (rule (overlay-get overlay 'languagetool-rule))
+					 (rule-id (alist-get 'id rule))
+					 (issue-type (alist-get 'issueType rule)))
 			(when (> (1+ pos) size)
 				(error "Correction key `%c' cannot be used" pressed-key))
 			(delete-region (overlay-start overlay) (overlay-end overlay))
-			(insert (nth pos (languagetool-core-get-replacements overlay)))
-			(delete-overlay overlay)))))
+			(insert replacement)
+			(delete-overlay overlay)
+			;; Run hook with correction info
+			(run-hook-with-args 'languagetool-correction-accepted-functions
+													(list :original-word original-word
+																:replacement replacement
+																:rule-id rule-id
+																:issue-type issue-type))))))
 
 (defun languagetool-correction-at-point ()
 	"Show issue at point and try to apply suggestion."
@@ -147,6 +175,19 @@ on OVERLAY."
 			(languagetool-correction-apply
 			 (read-char (languagetool-correction-parse-message ov))
 			 ov))))
+
+(defun languagetool-correction-add-to-abbrev (info)
+	"Add a misspelling correction to `global-abbrev-table'.
+INFO is a plist passed by `languagetool-correction-accepted-functions'.
+Only adds the abbreviation if the issue type is \"misspelling\".
+
+To use, add this function to the hook:
+  (add-hook \\='languagetool-correction-accepted-functions
+            #\\='languagetool-correction-add-to-abbrev)"
+	(when (equal (plist-get info :issue-type) "misspelling")
+		(define-abbrev global-abbrev-table
+			(plist-get info :original-word)
+			(plist-get info :replacement))))
 
 (provide 'languagetool-correction)
 

@@ -46,6 +46,14 @@ The main changes are documented in [[https://github.com/PillFall/languagetool.el
 7. *Forward Correction*: The ~languagetool-correct-buffer-forward~ function
    processes corrections from buffer start instead of end.
 
+8. *Personal Dictionary Suggestions*: When a word is flagged as misspelled,
+   similar words from the personal dictionary are suggested as corrections.
+   The comparison ignores case and accents (e.g., "résumé" matches "resume").
+
+9. *Correction Accepted Hook*: The ~languagetool-correction-accepted-functions~
+   hook is called when a correction is applied, allowing custom actions like
+   automatically adding misspellings to abbrev.
+
 ** Introduction
 
 LanguageTool is a free and open-source multilingual grammar, style, and spell
@@ -208,9 +216,37 @@ that you might only find useful when checking formal text. To change the level
 you can set your [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Specifying-File-Variables.html][local file variable]] ~languagetool-suggestion-level~ to the
 value desired, in lowercase.
 
+*** Correction Accepted Hook
 
+When a user accepts a correction suggestion, the hook
+~languagetool-correction-accepted-functions~ is called. Each function in the
+hook receives a plist with the following keys:
 
+- ~:original-word~ - the word before correction
+- ~:replacement~ - the correction that was applied
+- ~:rule-id~ - the LanguageTool rule ID (e.g., "MORFOLOGIK_RULE_FR")
+- ~:issue-type~ - the type of issue (e.g., "misspelling", "grammar")
 
+This hook allows you to perform custom actions when corrections are applied.
+A common use case is to automatically add misspelling corrections to Emacs
+abbrev, so that the same typo is automatically corrected in the future.
+
+The package provides ~languagetool-correction-add-to-abbrev~ for this purpose:
+
+#+BEGIN_SRC elisp
+(add-hook 'languagetool-correction-accepted-functions
+          #'languagetool-correction-add-to-abbrev)
+#+END_SRC
+
+This function only adds abbreviations for misspelling errors (not grammar or
+style issues). When you correct "bonjoure" to "bonjour", it will automatically
+create an abbrev entry so that typing "bonjoure" will expand to "bonjour".
+
+To persist abbrevs across sessions, make sure to save them:
+
+#+BEGIN_SRC elisp
+(setq save-abbrevs 'silently)
+#+END_SRC
 
 ** Quick Usage
 
