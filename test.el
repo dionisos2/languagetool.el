@@ -942,4 +942,30 @@ original position."
 				(delete-overlay ov1)
 				(delete-overlay ov2)))))
 
+(ert-deftest languagetool-test-correct-at-point-resets-correcting-p-on-quit ()
+	"Test that languagetool-server-correcting-p is reset when correction is interrupted.
+When the user presses C-g during `languagetool-correct-at-point', the variable
+`languagetool-server-correcting-p' should be reset to nil."
+	(with-temp-buffer
+		(insert "Test text with error here")
+		(setq-local languagetool-server-mode t)
+		(setq-local languagetool-server-correcting-p nil)
+		(let ((ov (make-overlay 1 5)))
+			(overlay-put ov 'languagetool-message "Test error")
+			(overlay-put ov 'languagetool-replacements [((value . "Fixed"))])
+			(overlay-put ov 'languagetool-rule '((id . "TEST_RULE")))
+			(unwind-protect
+					(progn
+						(goto-char 1)
+						;; Mock read-char to signal quit (simulating C-g)
+						(cl-letf (((symbol-function 'read-char)
+											 (lambda (&rest _) (signal 'quit nil))))
+							;; Call correct-at-point, which should handle the quit
+							(condition-case nil
+									(languagetool-correct-at-point)
+								(quit nil)))
+						;; After quit, correcting-p should be nil, not t
+						(should-not languagetool-server-correcting-p))
+				(delete-overlay ov)))))
+
 ;; test.el ends here

@@ -99,9 +99,10 @@ checked."
 	(interactive)
 	(when languagetool-server-mode
 		(setq languagetool-server-correcting-p t))
-	(languagetool-correction-at-point)
-	(when languagetool-server-mode
-		(setq languagetool-server-correcting-p nil)))
+	(unwind-protect
+			(languagetool-correction-at-point)
+		(when languagetool-server-mode
+			(setq languagetool-server-correcting-p nil))))
 
 ;;;###autoload
 (defun languagetool-correct-buffer (&optional reverse)
