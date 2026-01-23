@@ -306,9 +306,9 @@ but only accepts the base ID FR_REPEATEDWORDS in disabledRules."
 	(with-temp-buffer
 		(let ((buffer-file-name "/tmp/test5.txt"))
 			(languagetool-update-rule-for-current-buffer "RULE_CUR")
-			(should (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))
+			(should (member "RULE_CUR" (languagetool-get-disabled-rules-for-current-buffer)))
 			(languagetool-update-rule-for-current-buffer "RULE_CUR" t)
-			(should-not (member "RULE_CUR" (languagetool-get-rules-for-current-buffer)))))
+			(should-not (member "RULE_CUR" (languagetool-get-disabled-rules-for-current-buffer)))))
 			;; Cleanup
 			(when (file-exists-p languagetool-rules-json-path)
 	(delete-file languagetool-rules-json-path))
@@ -1094,5 +1094,30 @@ that word should be added to the replacement suggestions."
 				(languagetool-correction-apply ?\C-s ov)
 				;; Hook should NOT have been called
 				(should-not hook-called)))))
+
+(ert-deftest languagetool-test-add-dict-suggestions-sorted-by-distance ()
+	"Test that suggestions are sorted by distance after merging LT and dict suggestions.
+When LanguageTool suggestions and personal dictionary suggestions are merged,
+the final list should be sorted by edit distance to the misspelled word."
+	(let* ((languagetool-correction-language "fr")
+				 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+				 (dict-file (languagetool-core--dict-file)))
+		;; Create a dictionary with "test" (distance 1 from "tst")
+		(with-temp-file dict-file
+			(insert "test\n"))
+		(languagetool-core-load-dict-file)
+		;; Simulate LanguageTool returning "toast" (distance 2 from "tst") as a suggestion
+		(let* ((lt-replacements [((value . "toast"))])  ;; distance 2
+					 (misspelled "tst")
+					 (result (languagetool-issue--add-dict-suggestions
+										lt-replacements misspelled))
+					 (values (mapcar (lambda (r) (alist-get 'value r))
+													 (append result nil))))
+			;; Both suggestions should be present
+			(should (member "test" values))
+			(should (member "toast" values))
+			;; "test" (distance 1) should come before "toast" (distance 2)
+			(should (< (cl-position "test" values :test #'equal)
+								 (cl-position "toast" values :test #'equal))))))
 
 ;; test.el ends here

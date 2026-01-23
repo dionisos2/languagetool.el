@@ -98,19 +98,28 @@ Each element is a cons cell with the form (ISSUE_TYPE . FACE_NAME)."
 
 (defun languagetool-issue--add-dict-suggestions (replacements misspelled-word)
 	"Add personal dictionary suggestions to REPLACEMENTS for MISSPELLED-WORD.
-Returns a new vector with dictionary suggestions appended."
+Returns a new vector with all suggestions sorted by edit distance."
 	(let* ((similar-words (languagetool-core-find-similar-words misspelled-word 2))
 				 (existing-values (mapcar (lambda (r) (alist-get 'value r))
 																	(append replacements nil)))
-				 (new-suggestions nil))
+				 (new-suggestions nil)
+				 (all-suggestions nil))
 		;; Filter out words already in replacements
 		(dolist (word similar-words)
 			(unless (member word existing-values)
 				(push `((value . ,word)) new-suggestions)))
-		;; Append new suggestions to existing replacements
-		(if new-suggestions
-				(vconcat replacements (nreverse new-suggestions))
-			replacements)))
+		;; Merge all suggestions
+		(setq all-suggestions (append (append replacements nil)
+																	(nreverse new-suggestions)))
+		;; Sort by edit distance to misspelled word
+		(setq all-suggestions
+					(sort all-suggestions
+								(lambda (a b)
+									(< (languagetool-core-string-distance
+											(alist-get 'value a) misspelled-word)
+										 (languagetool-core-string-distance
+											(alist-get 'value b) misspelled-word)))))
+		(vconcat all-suggestions)))
 
 (defun languagetool-issue-create-overlay (begin end correction)
 	"Create an overlay for corrections.
