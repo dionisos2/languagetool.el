@@ -155,15 +155,6 @@ Each element is a cons-cell with the form (CODE . NAME)."
 					(const nil)
 					(repeat string)))
 
-(defcustom languagetool-local-disabled-rules nil
-	"LanguageTool buffer local disabled rules."
-	:group 'languagetool
-	:local t
-	:safe #'languagetool-core-safe-rules
-	:type '(choice
-					(const nil)
-					(repeat string)))
-
 
 (defcustom languagetool-hint-function
 	'languagetool-core-hint-default-function
@@ -413,7 +404,12 @@ If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID."
 	(when buffer-file-name
 		(languagetool-update-rule-for-file buffer-file-name rule-id remove)))
 
-(defun languagetool-get-rules-for-current-buffer ()
+(defun languagetool-show-disabled-rules-for-current-buffer ()
+	(interactive)
+	(message (format "%s" (languagetool-get-disabled-rules-for-current-buffer)))
+	)
+
+(defun languagetool-get-disabled-rules-for-current-buffer ()
 	"Return the list of disabled rule IDs for the current buffer's file."
 	(when buffer-file-name
 		(languagetool-get-rules-for-file buffer-file-name)))

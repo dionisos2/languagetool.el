@@ -429,7 +429,7 @@ BUFFER is the buffer to check, START and END define the region."
 			;; Appends the disabled rules
 			(let ((rules))
 				;; Global disabled rules
-				(setq rules (string-join (append languagetool-disabled-rules (languagetool-get-rules-for-current-buffer)) ","))
+				(setq rules (string-join (append languagetool-disabled-rules (languagetool-get-disabled-rules-for-current-buffer)) ","))
 				(unless (string= rules "")
 					(push (list "disabledRules" rules) arguments)))
 			(push (list "text" (url-hexify-string (buffer-substring-no-properties region-start region-end))) arguments))))
