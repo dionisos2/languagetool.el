@@ -105,12 +105,16 @@ checked."
 			(setq languagetool-server-correcting-p nil))))
 
 ;;;###autoload
-(defun languagetool-correct-buffer (&optional reverse)
+(defun languagetool-correct-buffer (&optional reverse from-point)
 	"Correct all LanguageTool errors in the buffer.
 
 If REVERSE is non-nil (default), corrections start from the last
 error and move backward.  If REVERSE is nil, corrections start from
 the first error and move forward.
+
+If FROM-POINT is non-nil, only correct errors at or after the current
+point position (when REVERSE is non-nil) or at or before point (when
+REVERSE is nil).
 
 This function pops up a transient buffer for each correction.
 
@@ -118,10 +122,12 @@ If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p'
 	(interactive "P")
 	(when languagetool-server-mode
 		(setq languagetool-server-correcting-p t))
-	(let ((original-point (point)))
+	(let ((original-point (point))
+				(start-pos (if from-point (point) (point-min)))
+				(end-pos (if from-point (point-max) (point-max))))
 		(condition-case err
 				(progn
-					(let* ((overlays (overlays-in (point-min) (point-max)))
+					(let* ((overlays (overlays-in start-pos end-pos))
 								 (sorted (sort overlays
 															 (lambda (a b)
 																 (if reverse
@@ -141,10 +147,20 @@ If `languagetool-server-mode' is active, sets `languagetool-server-correcting-p'
 	(when languagetool-server-mode
 		(setq languagetool-server-correcting-p nil)))
 
-(defun languagetool-correct-buffer-forward ()
-	"Correct all LanguageTool errors in the buffer, starting from the first error."
+;;;###autoload
+(defun languagetool-correct-buffer-forward (&optional from-point)
+	"Correct all LanguageTool errors in the buffer, starting from the first error.
+
+If FROM-POINT is non-nil (prefix argument with \\[universal-argument]),
+only correct errors at or after the current point position."
+	(interactive "P")
+	(languagetool-correct-buffer t from-point))
+
+;;;###autoload
+(defun languagetool-correct-buffer-forward-from-point ()
+	"Correct LanguageTool errors from point to end of buffer."
 	(interactive)
-	(languagetool-correct-buffer t))
+	(languagetool-correct-buffer-forward t))
 
 (provide 'languagetool)
 

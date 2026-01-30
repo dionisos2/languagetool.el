@@ -1120,4 +1120,64 @@ the final list should be sorted by edit distance to the misspelled word."
 			(should (< (cl-position "test" values :test #'equal)
 								 (cl-position "toast" values :test #'equal))))))
 
+(ert-deftest languagetool-test-correct-buffer-forward-from-point ()
+	"Test that languagetool-correct-buffer-forward with prefix arg starts from point.
+When called with C-u prefix, only errors at or after point should be corrected."
+	(with-temp-buffer
+		(insert "First error here and second error there")
+		;; Create two LanguageTool overlays at positions 7-12 and 26-31
+		(let ((ov1 (make-overlay 7 12))
+					(ov2 (make-overlay 26 31))
+					(corrected-positions nil))
+			(overlay-put ov1 'languagetool-message "Error 1")
+			(overlay-put ov1 'languagetool-replacements [])
+			(overlay-put ov2 'languagetool-message "Error 2")
+			(overlay-put ov2 'languagetool-replacements [])
+			(unwind-protect
+					(progn
+						;; Mock languagetool-correction-at-point to record which positions are corrected
+						(cl-letf (((symbol-function 'languagetool-correction-at-point)
+											 (lambda ()
+												 (push (point) corrected-positions))))
+							;; Position point after the first error (at position 15)
+							(goto-char 15)
+							;; Call correct-buffer-forward with prefix argument (from-point)
+							(languagetool-correct-buffer-forward t))
+						;; Only the second error (at 26) should have been corrected
+						(should (= (length corrected-positions) 1))
+						(should (= (car corrected-positions) 26)))
+				(delete-overlay ov1)
+				(delete-overlay ov2)))))
+
+(ert-deftest languagetool-test-correct-buffer-forward-without-prefix ()
+	"Test that languagetool-correct-buffer-forward without prefix arg corrects all errors.
+When called without C-u prefix, all errors should be corrected regardless of point position."
+	(with-temp-buffer
+		(insert "First error here and second error there")
+		;; Create two LanguageTool overlays at positions 7-12 and 26-31
+		(let ((ov1 (make-overlay 7 12))
+					(ov2 (make-overlay 26 31))
+					(corrected-positions nil))
+			(overlay-put ov1 'languagetool-message "Error 1")
+			(overlay-put ov1 'languagetool-replacements [])
+			(overlay-put ov2 'languagetool-message "Error 2")
+			(overlay-put ov2 'languagetool-replacements [])
+			(unwind-protect
+					(progn
+						;; Mock languagetool-correction-at-point to record which positions are corrected
+						(cl-letf (((symbol-function 'languagetool-correction-at-point)
+											 (lambda ()
+												 (push (point) corrected-positions))))
+							;; Position point after the first error (at position 15)
+							(goto-char 15)
+							;; Call correct-buffer-forward WITHOUT prefix argument
+							(languagetool-correct-buffer-forward nil))
+						;; Both errors should have been corrected
+						(should (= (length corrected-positions) 2))
+						;; Forward order: first error first, then second
+						(should (member 7 corrected-positions))
+						(should (member 26 corrected-positions)))
+				(delete-overlay ov1)
+				(delete-overlay ov2)))))
+
 ;; test.el ends here
