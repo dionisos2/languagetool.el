@@ -807,6 +807,35 @@ Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buff
 			(when (file-directory-p languagetool-dict-directory)
 	(delete-directory languagetool-dict-directory t)))))
 
+(ert-deftest languagetool-test-correction-add-word-case-sensitive ()
+	"Test that languagetool-correction-add-word is case-sensitive.
+Words with different casing should be treated as different words.
+This tests the bug where re-search-forward uses case-fold-search
+which can make 'nouveau_mot' and 'Nouveau_mot' appear identical."
+	(let* ((languagetool-correction-language "fr")
+		 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+		 (dict-file (languagetool-core--dict-file)))
+		(unwind-protect
+	(progn
+		;; Add lowercase word
+		(languagetool-correction-add-word "nouveau_mot")
+		;; Add same word with different case - should be added as separate entry
+		(languagetool-correction-add-word "Nouveau_mot")
+		;; Read the file and count lines - should have 2 words
+		(let ((lines (with-temp-buffer
+						 (insert-file-contents dict-file)
+						 (split-string (string-trim (buffer-string)) "\n" t))))
+			;; Should have exactly 2 entries
+			(should (= (length lines) 2))
+			;; Both words should be present (use equal for exact match)
+			(should (member "nouveau_mot" lines))
+			(should (member "Nouveau_mot" lines))))
+			;; Cleanup
+			(when (file-exists-p dict-file)
+	(delete-file dict-file))
+			(when (file-directory-p languagetool-dict-directory)
+	(delete-directory languagetool-dict-directory t)))))
+
 (ert-deftest languagetool-test-correction-add-word-trims-whitespace ()
 	"Test that languagetool-correction-add-word trims whitespace around words."
 	(let* ((languagetool-correction-language "fr")

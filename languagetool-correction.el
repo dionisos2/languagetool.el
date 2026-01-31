@@ -112,9 +112,10 @@ If WORD already exists in the dictionary, it is not added again."
 		(with-temp-buffer
 			(when (file-exists-p dict-file)
 				(insert-file-contents dict-file))
-			;; Check if word already exists (as a complete line)
+			;; Check if word already exists (as a complete line, case-sensitive)
 			(goto-char (point-min))
-			(unless (re-search-forward (concat "^" (regexp-quote trimmed-word) "$") nil t)
+			(unless (let ((case-fold-search nil))
+								(re-search-forward (concat "^" (regexp-quote trimmed-word) "$") nil t))
 				;; Word not found, add it
 				(goto-char (point-max))
 				(unless (or (bobp) (looking-back "\n" 1))
