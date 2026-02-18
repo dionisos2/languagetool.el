@@ -239,6 +239,11 @@ from hooks later.  Each buffer gets its own unique closure."
 (defvar languagetool-server-process nil
 	"LanguageTool Server inferior process reference if any.")
 
+(defvar languagetool-server--globally-disabled nil
+	"When non-nil, prevent activation of `languagetool-server-mode' in all buffers.
+Set to t when a connection error occurs.  Use `languagetool-server-retry'
+to reset this flag and attempt reconnection.")
+
 (defvar-local languagetool-server-open-communication-p nil
 	"Set to non-nil if server communication is open, nil otherwise.")
 
@@ -255,21 +260,27 @@ Buffer-local to allow independent correction in multiple buffers.")
 	"Turn on LanguageTool Server mode.
 
 Don't use this function, use `languagetool-server-mode' instead."
-	;; Start checking for LanguageTool server is able to handle requests
-	(languagetool-server-check-for-communication)
-	(languagetool-core-load-dict-file)
+	;; Check if server is globally disabled due to previous connection error
+	(if languagetool-server--globally-disabled
+			(progn
+				(setq languagetool-server-mode nil)
+				(let ((inhibit-message t))
+					(message "LanguageTool: Server unavailable. Use M-x languagetool-server-retry after starting the server.")))
+		;; Start checking for LanguageTool server is able to handle requests
+		(languagetool-server-check-for-communication)
+		(languagetool-core-load-dict-file)
 
-	(if languagetool-server-check-visible-text
-			(languagetool-server-activate-check-visible-text)
-		(languagetool-server-desactivate-check-visible-text))
-	;; Initial check of visible text
-	(languagetool-server-should-check)
+		(if languagetool-server-check-visible-text
+				(languagetool-server-activate-check-visible-text)
+			(languagetool-server-desactivate-check-visible-text))
+		;; Initial check of visible text
+		(languagetool-server-should-check)
 
-	;; Init hint timer if not already running
-	(unless (timerp languagetool-core-hint-timer)
-		(setq languagetool-core-hint-timer
-					(run-with-idle-timer languagetool-hint-idle-delay t
-															 languagetool-hint-function))))
+		;; Init hint timer if not already running
+		(unless (timerp languagetool-core-hint-timer)
+			(setq languagetool-core-hint-timer
+						(run-with-idle-timer languagetool-hint-idle-delay t
+																 languagetool-hint-function)))))
 
 (defun languagetool-server-mode-off ()
 	"Turn off LanguageTool Server mode.
@@ -375,6 +386,15 @@ It's not recommended to run this function more than once."
 	(interactive)
 	(when (process-live-p languagetool-server-process)
 		(delete-process languagetool-server-process)))
+
+;;;###autoload
+(defun languagetool-server-retry ()
+	"Retry connecting to LanguageTool server after a connection failure.
+Resets the global disabled flag and attempts to enable the mode
+in the current buffer."
+	(interactive)
+	(setq languagetool-server--globally-disabled nil)
+	(languagetool-server-mode 1))
 
 (defun languagetool-server-check-for-communication ()
 	"Check if the LanguageTool Server is able to handle requests.
@@ -587,8 +607,22 @@ REGION-START is the offset for correction positions."
 					(languagetool-server--apply-correction
 					 (aref corrections index) region-start buffer-max))))))
 
-(defun languagetool-server-highlight-matches (_status checking-buffer region-start last-request)
+(defun languagetool-server--disable-mode-on-error (checking-buffer message)
+	"Disable LanguageTool server mode in CHECKING-BUFFER and show MESSAGE.
+Also sets `languagetool-server--globally-disabled' to prevent activation
+in other buffers until the user calls `languagetool-server-retry'."
+	(setq languagetool-server--globally-disabled t)
+	(when (buffer-live-p checking-buffer)
+		(with-current-buffer checking-buffer
+			(when languagetool-server-mode
+				(setq languagetool-server-mode nil)
+				(languagetool-server-mode-off)
+				(message "LanguageTool: %s. Use M-x languagetool-server-retry after starting the server."
+								 message)))))
+
+(defun languagetool-server-highlight-matches (status checking-buffer region-start last-request)
 	"Highlight LanguageTool Server issues in CHECKING-BUFFER.
+STATUS contains connection status from `url-retrieve'.
 REGION-START is the starting position for the checked region.
 LAST-REQUEST is used to verify this is still the current request."
 	(let ((response-buffer (current-buffer)))
@@ -599,16 +633,27 @@ LAST-REQUEST is used to verify this is still the current request."
 									 (buffer-live-p checking-buffer)
 									 (not (buffer-local-value 'languagetool-server-correcting-p
 																						checking-buffer)))
-					(when (/= (symbol-value 'url-http-response-status) 200)
-						(error "LanguageTool Server closed"))
-					(when-let ((json-parsed (languagetool-server--parse-response)))
-						(with-current-buffer checking-buffer
-							(save-excursion
-								(languagetool-server--apply-corrections json-parsed region-start))
-							(setq languagetool-server--error-count
-										(languagetool-server--count-overlays))
-							(setq languagetool-server--status 'done)
-							(force-mode-line-update))))
+					;; Check for connection errors in status
+					(if (plist-get status :error)
+							(languagetool-server--disable-mode-on-error
+							 checking-buffer
+							 (format "Connection error: %s" (cadr (plist-get status :error))))
+						;; Check HTTP response status
+						(let ((http-status (and (boundp 'url-http-response-status)
+																		url-http-response-status)))
+							(if (or (null http-status) (/= http-status 200))
+									(languagetool-server--disable-mode-on-error
+									 checking-buffer
+									 (format "Server error (status: %s)" http-status))
+								;; Success - parse and apply corrections
+								(when-let ((json-parsed (languagetool-server--parse-response)))
+									(with-current-buffer checking-buffer
+										(save-excursion
+											(languagetool-server--apply-corrections json-parsed region-start))
+										(setq languagetool-server--error-count
+													(languagetool-server--count-overlays))
+										(setq languagetool-server--status 'done)
+										(force-mode-line-update)))))))
 			(when (buffer-live-p response-buffer)
 				(kill-buffer response-buffer)))))
 

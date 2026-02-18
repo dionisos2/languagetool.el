@@ -1209,4 +1209,87 @@ When called without C-u prefix, all errors should be corrected regardless of poi
 				(delete-overlay ov1)
 				(delete-overlay ov2)))))
 
+(ert-deftest languagetool-test-server-mode-disabled-on-connection-error ()
+	"Test that languagetool-server-mode is disabled when server connection fails.
+When the server becomes unavailable, the mode should be automatically disabled
+instead of continuously trying to reconnect."
+	(let ((test-buffer (generate-new-buffer "*test-connection-error*")))
+		(unwind-protect
+				(with-current-buffer test-buffer
+					(insert "Some test text to check")
+					(setq-local languagetool-server-mode t)
+					(setq-local languagetool-server-last-request 1)
+					(setq-local languagetool-server-correcting-p nil)
+					;; Create a mock HTTP response buffer that simulates connection failure
+					(let ((response-buffer (generate-new-buffer "*mock-http-error*")))
+						(unwind-protect
+								(with-current-buffer response-buffer
+									;; Simulate a failed connection (no response status or error status)
+									(insert "")
+									(setq-local url-http-response-status nil)
+									;; Call highlight-matches which should handle the error
+									;; and disable the mode
+									(condition-case nil
+											(languagetool-server-highlight-matches
+											 '(:error (error connection-failed "Connection refused"))
+											 test-buffer 1 1)
+										(error nil)))
+							(when (buffer-live-p response-buffer)
+								(kill-buffer response-buffer))))
+					;; After a connection error, the mode should be disabled
+					(should-not languagetool-server-mode))
+			(kill-buffer test-buffer))))
+
+(ert-deftest languagetool-test-server-globally-disabled-after-error ()
+	"Test that server is globally disabled after connection error.
+When one buffer encounters a connection error, new buffers should not
+attempt to connect until the user calls languagetool-server-retry."
+	(let ((languagetool-server--globally-disabled nil)
+				(buffer-a (generate-new-buffer "*test-global-a*"))
+				(buffer-b (generate-new-buffer "*test-global-b*")))
+		(unwind-protect
+				(progn
+					;; Simulate connection error in buffer-a
+					(with-current-buffer buffer-a
+						(insert "Some text")
+						(setq-local languagetool-server-mode t)
+						(setq-local languagetool-server-last-request 1)
+						(setq-local languagetool-server-correcting-p nil)
+						(let ((response-buffer (generate-new-buffer "*mock-error*")))
+							(unwind-protect
+									(with-current-buffer response-buffer
+										(setq-local url-http-response-status nil)
+										(languagetool-server-highlight-matches
+										 '(:error (error connection-failed "Connection refused"))
+										 buffer-a 1 1))
+								(when (buffer-live-p response-buffer)
+									(kill-buffer response-buffer)))))
+					;; Server should now be globally disabled
+					(should languagetool-server--globally-disabled)
+					;; Trying to enable mode in buffer-b should fail silently
+					(with-current-buffer buffer-b
+						(insert "Other text")
+						;; Mock the server check to avoid actual network call
+						(cl-letf (((symbol-function 'languagetool-server-check-for-communication)
+											 #'ignore))
+							(languagetool-server-mode 1))
+						;; Mode should NOT be enabled because server is globally disabled
+						(should-not languagetool-server-mode)))
+			;; Cleanup
+			(setq languagetool-server--globally-disabled nil)
+			(kill-buffer buffer-a)
+			(kill-buffer buffer-b))))
+
+(ert-deftest languagetool-test-server-retry-resets-global-flag ()
+	"Test that languagetool-server-retry resets the global disabled flag."
+	(let ((languagetool-server--globally-disabled t))
+		;; Mock the server check to avoid actual network call
+		(cl-letf (((symbol-function 'languagetool-server-check-for-communication)
+							 #'ignore)
+							((symbol-function 'languagetool-server-mode-on)
+							 #'ignore))
+			(languagetool-server-retry)
+			;; Global flag should be reset
+			(should-not languagetool-server--globally-disabled))))
+
 ;; test.el ends here

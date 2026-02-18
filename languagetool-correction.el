@@ -43,18 +43,10 @@ Each element should be a character (integer) used to select suggestions."
 (defvar languagetool-correction-accepted-functions nil
 	"Hook run when a correction suggestion is accepted.
 Each function receives a plist with the following keys:
-  :original-word - the word before correction
-  :replacement   - the correction that was applied
-  :rule-id       - the LanguageTool rule ID (e.g. \"MORFOLOGIK_RULE_FR\")
-  :issue-type    - the type of issue (e.g. \"misspelling\", \"grammar\")
-
-Example use case: automatically add misspelling corrections to abbrev:
-  (add-hook \\='languagetool-correction-accepted-functions
-            (lambda (info)
-              (when (equal (plist-get info :issue-type) \"misspelling\")
-                (define-abbrev global-abbrev-table
-                  (plist-get info :original-word)
-                  (plist-get info :replacement)))))")
+	:original-word - the word before correction
+	:replacement   - the correction that was applied
+	:rule-id       - the LanguageTool rule ID
+	:issue-type    - the type of issue (e.g. \"misspelling\", \"grammar\")")
 
 ;; Function definitions:
 
@@ -180,11 +172,7 @@ on OVERLAY."
 (defun languagetool-correction-add-to-abbrev (info)
 	"Add a misspelling correction to `global-abbrev-table'.
 INFO is a plist passed by `languagetool-correction-accepted-functions'.
-Only adds the abbreviation if the issue type is \"misspelling\".
-
-To use, add this function to the hook:
-  (add-hook \\='languagetool-correction-accepted-functions
-            #\\='languagetool-correction-add-to-abbrev)"
+Only adds the abbreviation if the issue type is \"misspelling\"."
 	(when (equal (plist-get info :issue-type) "misspelling")
 		(define-abbrev global-abbrev-table
 			(plist-get info :original-word)

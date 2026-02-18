@@ -292,6 +292,8 @@ Each function should accept a single argument WORD and return t if the word shou
 	(and languagetool-core--dict-word-list
 			 (member word languagetool-core--dict-word-list)))
 
+(declare-function ucs-normalize-NFD-string "ucs-normalize" (str))
+
 (defun languagetool-core--normalize-string (s)
 	"Normalize string S for fuzzy comparison.
 Converts to lowercase and removes diacritical marks (accents)."
@@ -405,9 +407,9 @@ If REMOVE is non-nil, remove RULE-ID; otherwise, add RULE-ID."
 		(languagetool-update-rule-for-file buffer-file-name rule-id remove)))
 
 (defun languagetool-show-disabled-rules-for-current-buffer ()
+	"Display the list of disabled LanguageTool rules for the current buffer."
 	(interactive)
-	(message (format "%s" (languagetool-get-disabled-rules-for-current-buffer)))
-	)
+	(message "%s" (languagetool-get-disabled-rules-for-current-buffer)))
 
 (defun languagetool-get-disabled-rules-for-current-buffer ()
 	"Return the list of disabled rule IDs for the current buffer's file."
