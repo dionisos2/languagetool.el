@@ -1292,4 +1292,148 @@ attempt to connect until the user calls languagetool-server-retry."
 			;; Global flag should be reset
 			(should-not languagetool-server--globally-disabled))))
 
+(ert-deftest languagetool-test-ignore-rule-removes-all-similar-overlays ()
+	"Test that ignoring a rule (C-i) removes all overlays with the same rule ID."
+	(with-temp-buffer
+		(insert "This is vraiment a vraiment good vraiment test")
+		(let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+					 (languagetool-dict-directory temp-dir)
+					 (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir))
+					 (buffer-file-name "/tmp/test-ignore-rule.txt")
+					 ;; Create three overlays with the same rule
+					 (ov1 (make-overlay 9 17))		; "vraiment" at position 9
+					 (ov2 (make-overlay 20 28))	 ; "vraiment" at position 20
+					 (ov3 (make-overlay 34 42)))	; "vraiment" at position 34
+			;; Set up overlays with the same rule
+			(dolist (ov (list ov1 ov2 ov3))
+				(overlay-put ov 'languagetool-message "Repeated word")
+				(overlay-put ov 'languagetool-rule '((id . "FR_REPEATEDWORDS")))
+				(overlay-put ov 'languagetool-replacements []))
+			(unwind-protect
+					(progn
+						;; Apply ignore (C-i) on the first overlay
+						(languagetool-correction-apply ?\C-i ov1)
+						;; All three overlays should be deleted
+						(should-not (overlay-buffer ov1))
+						(should-not (overlay-buffer ov2))
+						(should-not (overlay-buffer ov3))
+						;; No languagetool overlays should remain
+						(should (= 0 (length (seq-filter
+																	(lambda (ov) (overlay-get ov 'languagetool-message))
+																	(overlays-in (point-min) (point-max)))))))
+				;; Cleanup
+				(when (overlay-buffer ov1) (delete-overlay ov1))
+				(when (overlay-buffer ov2) (delete-overlay ov2))
+				(when (overlay-buffer ov3) (delete-overlay ov3))
+				(when (file-exists-p languagetool-rules-json-path)
+					(delete-file languagetool-rules-json-path))
+				(when (file-directory-p temp-dir)
+					(delete-directory temp-dir t))))))
+
+(ert-deftest languagetool-test-add-word-removes-all-similar-overlays ()
+	"Test that adding a word (C-a) removes all overlays with the same word."
+	(with-temp-buffer
+		(insert "The Emacs editor is great. Emacs is powerful. I love Emacs.")
+		(let* ((languagetool-correction-language "fr")
+					 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+					 (dict-file (languagetool-core--dict-file))
+					 ;; Create three overlays for the word "Emacs"
+					 (ov1 (make-overlay 5 10))		; "Emacs" at position 5
+					 (ov2 (make-overlay 28 33))	 ; "Emacs" at position 28
+					 (ov3 (make-overlay 54 59)))	; "Emacs" at position 54
+			;; Set up overlays with the same misspelled word
+			(dolist (ov (list ov1 ov2 ov3))
+				(overlay-put ov 'languagetool-message "Unknown word")
+				(overlay-put ov 'languagetool-rule '((id . "MORFOLOGIK_RULE_FR")))
+				(overlay-put ov 'languagetool-replacements []))
+			(unwind-protect
+					(progn
+						;; Go to first overlay position
+						(goto-char 5)
+						;; Apply add word (C-a) on the first overlay
+						(languagetool-correction-apply ?\C-a ov1)
+						;; All three overlays should be deleted
+						(should-not (overlay-buffer ov1))
+						(should-not (overlay-buffer ov2))
+						(should-not (overlay-buffer ov3))
+						;; No languagetool overlays should remain
+						(should (= 0 (length (seq-filter
+																	(lambda (ov) (overlay-get ov 'languagetool-message))
+																	(overlays-in (point-min) (point-max)))))))
+				;; Cleanup
+				(when (overlay-buffer ov1) (delete-overlay ov1))
+				(when (overlay-buffer ov2) (delete-overlay ov2))
+				(when (overlay-buffer ov3) (delete-overlay ov3))
+				(when (file-exists-p dict-file)
+					(delete-file dict-file))
+				(when (file-directory-p languagetool-dict-directory)
+					(delete-directory languagetool-dict-directory t))))))
+
+(ert-deftest languagetool-test-ignore-rule-keeps-different-rules ()
+	"Test that ignoring a rule only removes overlays with that specific rule."
+	(with-temp-buffer
+		(insert "This vraiment has multiple errors differents types")
+		(let* ((temp-dir (make-temp-file "lt-rules-dir" t))
+					 (languagetool-dict-directory temp-dir)
+					 (languagetool-rules-json-path (expand-file-name "languagetool-rules.json" temp-dir))
+					 (buffer-file-name "/tmp/test-keep-different.txt")
+					 (ov1 (make-overlay 6 14))		; "vraiment" - repeated word
+					 (ov2 (make-overlay 38 48)))	; "differents" - spelling
+			;; Set up overlays with different rules
+			(overlay-put ov1 'languagetool-message "Repeated word")
+			(overlay-put ov1 'languagetool-rule '((id . "FR_REPEATEDWORDS")))
+			(overlay-put ov1 'languagetool-replacements [])
+			(overlay-put ov2 'languagetool-message "Spelling mistake")
+			(overlay-put ov2 'languagetool-rule '((id . "MORFOLOGIK_RULE_FR")))
+			(overlay-put ov2 'languagetool-replacements [])
+			(unwind-protect
+					(progn
+						;; Apply ignore (C-i) on the first overlay (FR_REPEATEDWORDS)
+						(languagetool-correction-apply ?\C-i ov1)
+						;; First overlay should be deleted
+						(should-not (overlay-buffer ov1))
+						;; Second overlay with different rule should remain
+						(should (overlay-buffer ov2)))
+				;; Cleanup
+				(when (overlay-buffer ov1) (delete-overlay ov1))
+				(when (overlay-buffer ov2) (delete-overlay ov2))
+				(when (file-exists-p languagetool-rules-json-path)
+					(delete-file languagetool-rules-json-path))
+				(when (file-directory-p temp-dir)
+					(delete-directory temp-dir t))))))
+
+(ert-deftest languagetool-test-add-word-keeps-different-words ()
+	"Test that adding a word only removes overlays for that specific word."
+	(with-temp-buffer
+		(insert "The Emacs editor and the Vim editor are both great.")
+		(let* ((languagetool-correction-language "fr")
+					 (languagetool-dict-directory (make-temp-file "lt-dict-dir" t))
+					 (dict-file (languagetool-core--dict-file))
+					 (ov1 (make-overlay 5 10))		; "Emacs"
+					 (ov2 (make-overlay 26 29)))	; "Vim"
+			;; Set up overlays with different words
+			(overlay-put ov1 'languagetool-message "Unknown word")
+			(overlay-put ov1 'languagetool-rule '((id . "MORFOLOGIK_RULE_FR")))
+			(overlay-put ov1 'languagetool-replacements [])
+			(overlay-put ov2 'languagetool-message "Unknown word")
+			(overlay-put ov2 'languagetool-rule '((id . "MORFOLOGIK_RULE_FR")))
+			(overlay-put ov2 'languagetool-replacements [])
+			(unwind-protect
+					(progn
+						;; Go to first overlay position
+						(goto-char 5)
+						;; Apply add word (C-a) on the first overlay (Emacs)
+						(languagetool-correction-apply ?\C-a ov1)
+						;; First overlay should be deleted
+						(should-not (overlay-buffer ov1))
+						;; Second overlay with different word should remain
+						(should (overlay-buffer ov2)))
+				;; Cleanup
+				(when (overlay-buffer ov1) (delete-overlay ov1))
+				(when (overlay-buffer ov2) (delete-overlay ov2))
+				(when (file-exists-p dict-file)
+					(delete-file dict-file))
+				(when (file-directory-p languagetool-dict-directory)
+					(delete-directory languagetool-dict-directory t))))))
+
 ;; test.el ends here

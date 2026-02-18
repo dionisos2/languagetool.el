@@ -117,6 +117,32 @@ If WORD already exists in the dictionary, it is not added again."
 		;; Reload dictionary list
 		(languagetool-core-load-dict-file)))
 
+(defun languagetool-correction--delete-overlays-with-rule (rule-id)
+	"Delete all LanguageTool overlays in buffer with RULE-ID.
+RULE-ID is normalized before comparison to handle dynamic rule IDs."
+	(let ((normalized-id (languagetool-normalize-rule-id rule-id)))
+		(save-restriction
+			(widen)
+			(dolist (ov (overlays-in (point-min) (point-max)))
+				(when (overlay-get ov 'languagetool-message)
+					(let* ((ov-rule (overlay-get ov 'languagetool-rule))
+								 (ov-rule-id (alist-get 'id ov-rule))
+								 (ov-normalized-id (when ov-rule-id
+																			(languagetool-normalize-rule-id ov-rule-id))))
+						(when (equal normalized-id ov-normalized-id)
+							(delete-overlay ov))))))))
+
+(defun languagetool-correction--delete-overlays-with-word (word)
+	"Delete all LanguageTool overlays in buffer matching WORD."
+	(save-restriction
+		(widen)
+		(dolist (ov (overlays-in (point-min) (point-max)))
+			(when (overlay-get ov 'languagetool-message)
+				(let ((ov-word (buffer-substring-no-properties
+												(overlay-start ov) (overlay-end ov))))
+					(when (equal word ov-word)
+						(delete-overlay ov)))))))
+
 (defun languagetool-correction-apply (pressed-key overlay)
 	"Apply LanguageTool replacement suggestion in OVERLAY.
 
@@ -127,13 +153,12 @@ on OVERLAY."
 		(save-excursion
 			(let ((rule-id (alist-get 'id (overlay-get overlay 'languagetool-rule))))
 				(languagetool-update-rule-for-current-buffer rule-id)
-				(delete-overlay overlay))))
+				(languagetool-correction--delete-overlays-with-rule rule-id))))
 	 ((char-equal ?\C-a pressed-key)
-		(progn
-			(let ((word (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay))))
-				(languagetool-correction-add-word word))
+		(let ((word (buffer-substring-no-properties (overlay-start overlay) (overlay-end overlay))))
+			(languagetool-correction-add-word word)
 			(goto-char (overlay-end overlay))
-			(delete-overlay overlay)))
+			(languagetool-correction--delete-overlays-with-word word)))
 	 ((char-equal ?\C-s pressed-key)
 		(goto-char (overlay-end overlay)))
 	 ((not (cl-position pressed-key languagetool-correction-keys))
