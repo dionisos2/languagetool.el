@@ -666,6 +666,52 @@ Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buff
 		 nil)
 			 (error err)))))
 
+;;; Tests for non-blocking mode initialization
+
+(ert-deftest languagetool-test-server-mode-on-is-non-blocking ()
+	"Test that enabling server mode does not call url-retrieve-synchronously.
+Previously, languagetool-server-mode-on used url-retrieve-synchronously,
+which blocked for up to languagetool-server-max-timeout seconds during mode
+hooks, triggering jit-lock with incomplete font-lock state and removing all
+syntax highlighting in org-mode and similar modes."
+	(let (sync-called)
+		(with-temp-buffer
+			(cl-letf (((symbol-function 'url-retrieve-synchronously)
+						 (lambda (&rest _)
+							 (setq sync-called t)
+							 (error "should not be called")))
+					 ((symbol-function 'url-retrieve)
+						(lambda (&rest _) nil)))
+				(languagetool-server-mode 1)
+				(should-not sync-called)
+				(when languagetool-server-mode
+					(languagetool-server-mode -1))))))
+
+(ert-deftest languagetool-test-server-mode-off-on-connection-failure ()
+	"Test that server mode is disabled when the async availability check fails.
+When the asynchronous server check returns an error status, the mode should
+be disabled gracefully without signaling an error."
+	(with-temp-buffer
+		(let (captured-callback)
+			(cl-letf (((symbol-function 'url-retrieve)
+						 (lambda (_url fn &rest _)
+							 (setq captured-callback fn)
+							 nil)))
+				;; Ensure the global disabled flag is clear for this test
+				(setq languagetool-server--globally-disabled nil)
+				(languagetool-server-mode 1)
+				(should languagetool-server-mode)
+				;; Simulate the async callback being called with a connection error
+				(when captured-callback
+					(let ((response-buf (generate-new-buffer "*lt-check-test*")))
+						(with-current-buffer response-buf
+							(setq-local url-http-response-status 503)
+							(funcall captured-callback '(:error (error . "connection refused"))))
+						(when (buffer-live-p response-buf)
+							(kill-buffer response-buf))))
+				;; Mode should now be off
+				(should-not languagetool-server-mode)))))
+
 ;;; Tests for timer accumulation fix
 
 (ert-deftest languagetool-test-timer-not-duplicated ()

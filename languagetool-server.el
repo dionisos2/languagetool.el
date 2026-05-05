@@ -266,21 +266,22 @@ Don't use this function, use `languagetool-server-mode' instead."
 				(setq languagetool-server-mode nil)
 				(let ((inhibit-message t))
 					(message "LanguageTool: Server unavailable. Use M-x languagetool-server-retry after starting the server.")))
-		;; Start checking for LanguageTool server is able to handle requests
-		(languagetool-server-check-for-communication)
 		(languagetool-core-load-dict-file)
 
 		(if languagetool-server-check-visible-text
 				(languagetool-server-activate-check-visible-text)
 			(languagetool-server-desactivate-check-visible-text))
-		;; Initial check of visible text
-		(languagetool-server-should-check)
 
 		;; Init hint timer if not already running
 		(unless (timerp languagetool-core-hint-timer)
 			(setq languagetool-core-hint-timer
 						(run-with-idle-timer languagetool-hint-idle-delay t
-																 languagetool-hint-function)))))
+																 languagetool-hint-function)))
+
+		;; Async server availability check — must be last to avoid signaling
+		;; errors or blocking during mode hook execution (which would disrupt
+		;; font-lock initialization in org-mode and similar modes).
+		(languagetool-server-check-for-communication)))
 
 (defun languagetool-server-mode-off ()
 	"Turn off LanguageTool Server mode.
@@ -399,23 +400,42 @@ in the current buffer."
 (defun languagetool-server-check-for-communication ()
 	"Check if the LanguageTool Server is able to handle requests.
 
-This methods will only check if the server is up for the number
-of seconds specified in `languagetool-server-max-timeout'."
+Sends an asynchronous GET request to verify server availability.
+On success, enables communication and schedules a grammar check.
+On failure, disables `languagetool-server-mode' with a message."
 	(unless languagetool-server-open-communication-p
-		(condition-case nil
-				(let ((url-request-method "GET"))
-					(with-current-buffer (url-retrieve-synchronously
-																(url-encode-url (format "%s:%d/v2/languages" languagetool-server-url languagetool-server-port))
-																nil
-																nil
-																languagetool-server-max-timeout)
-						(when (/= (symbol-value 'url-http-response-status) 200)
-							(error "Not successful response"))
-						(setq languagetool-server-open-communication-p t)))
-			(error
-			 (languagetool-server-mode -1)
-			 (error "LanguageTool Server cannot communicate with server")))
-		(languagetool-server-should-check)))
+		(let ((buf (current-buffer))
+					(url-request-method "GET"))
+			(condition-case err
+					(url-retrieve
+					 (url-encode-url (format "%s:%d/v2/languages"
+																	languagetool-server-url
+																	languagetool-server-port))
+					 (lambda (status)
+						 (let ((response-buffer (current-buffer)))
+							 (unwind-protect
+									 (when (buffer-live-p buf)
+										 (with-current-buffer buf
+											 (if (plist-get status :error)
+													 (when languagetool-server-mode
+														 (languagetool-server-mode -1)
+														 (message "LanguageTool: server not available"))
+												 (if (/= (symbol-value 'url-http-response-status) 200)
+														 (when languagetool-server-mode
+															 (languagetool-server-mode -1)
+															 (message "LanguageTool: server not available"))
+													 (setq languagetool-server-open-communication-p t)
+													 (languagetool-server-should-check)))))
+								 (when (buffer-live-p response-buffer)
+									 (kill-buffer response-buffer)))))
+					 nil t)
+				(error
+				 (message "LanguageTool: cannot connect to server: %s"
+									(error-message-string err))
+				 (when (buffer-live-p buf)
+					 (with-current-buffer buf
+						 (when languagetool-server-mode
+							 (languagetool-server-mode -1)))))))))
 
 (defun languagetool-server-parse-request (buffer start end)
 	"Return an assoc-list with LanguageTool Server request arguments parsed.
@@ -552,12 +572,13 @@ new check if the relevant region or text has changed."
 (defun languagetool-server-send-request (buffer start end)
 	"Send a request to the server for BUFFER and parse the output given.
 START and END define the region to check.
-Does nothing if the region is empty."
+Does nothing if the region is empty or the server is not confirmed available."
 	(with-current-buffer buffer
 		(let* ((region-start (or start (point-min)))
 					 (region-end (or end (point-max))))
-			;; Skip request if text is empty
-			(when (< region-start region-end)
+			;; Skip request if server not yet confirmed available or text is empty
+			(when (and languagetool-server-open-communication-p
+								 (< region-start region-end))
 				(setq languagetool-server--status 'checking)
 				(force-mode-line-update)
 				(let* ((url-request-method "POST")
