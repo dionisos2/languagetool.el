@@ -412,7 +412,9 @@ On failure, disables `languagetool-server-mode' with a message."
 																	languagetool-server-url
 																	languagetool-server-port))
 					 (lambda (status)
-						 (let ((response-buffer (current-buffer)))
+						 (let ((response-buffer (current-buffer))
+									 (http-status (and (boundp 'url-http-response-status)
+																		 url-http-response-status)))
 							 (unwind-protect
 									 (when (buffer-live-p buf)
 										 (with-current-buffer buf
@@ -420,7 +422,7 @@ On failure, disables `languagetool-server-mode' with a message."
 													 (when languagetool-server-mode
 														 (languagetool-server-mode -1)
 														 (message "LanguageTool: server not available"))
-												 (if (/= (symbol-value 'url-http-response-status) 200)
+												 (if (or (null http-status) (/= http-status 200))
 														 (when languagetool-server-mode
 															 (languagetool-server-mode -1)
 															 (message "LanguageTool: server not available"))

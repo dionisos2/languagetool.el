@@ -666,6 +666,73 @@ Fix for bug: timer fires after buffer is killed, causing 'Selecting deleted buff
 		 nil)
 			 (error err)))))
 
+;;; Tests for check-for-communication url-http-response-status fix
+
+(ert-deftest languagetool-test-check-for-communication-with-200-response ()
+	"Test that server availability check enables communication on HTTP 200 response.
+Regression test: before the fix, url-http-response-status was accessed inside
+with-current-buffer of the checking buffer, where it has no buffer-local binding.
+The response buffer had status 200, but the checking buffer had nil or void, so
+the mode disabled itself even with a valid server response.
+Fix: capture the value with boundp check before switching buffers."
+	(with-temp-buffer
+		(let (captured-callback)
+			(setq languagetool-server--globally-disabled nil)
+			(setq-local languagetool-server-open-communication-p nil)
+			(cl-letf (((symbol-function 'url-retrieve)
+								 (lambda (_url fn &rest _)
+									 (setq captured-callback fn)
+									 nil))
+								((symbol-function 'languagetool-server-should-check) #'ignore)
+								((symbol-function 'message) #'ignore))
+				(languagetool-server-mode 1)
+				(when captured-callback
+					(let ((response-buf (generate-new-buffer "*lt-200-test*")))
+						(unwind-protect
+								(with-current-buffer response-buf
+									(setq-local url-http-response-status 200)
+									(funcall captured-callback nil))
+							(when (buffer-live-p response-buf)
+								(kill-buffer response-buf)))))
+				;; Communication should be open after 200 response
+				(should languagetool-server-open-communication-p)
+				(when languagetool-server-mode
+					(languagetool-server-mode -1))))))
+
+(ert-deftest languagetool-test-check-for-communication-void-url-status ()
+	"Test that server availability check handles missing url-http-response-status.
+Regression test for 'Symbol's value as variable is void: url-http-response-status'.
+Before the fix, the variable was read inside with-current-buffer of the checking
+buffer, where it has no buffer-local binding.  With url-http unloaded this causes
+void-variable; with url-http loaded the global nil causes wrong-type-argument from
+\\((/= nil 200)\\).  Fix: capture the value with boundp check before switching buffers."
+	(with-temp-buffer
+		(let (captured-callback)
+			(setq languagetool-server--globally-disabled nil)
+			(cl-letf (((symbol-function 'url-retrieve)
+								 (lambda (_url fn &rest _)
+									 (setq captured-callback fn)
+									 nil))
+								((symbol-function 'message) #'ignore))
+				(languagetool-server-mode 1)
+				(when captured-callback
+					(let ((response-buf (generate-new-buffer "*lt-void-status-test*")))
+						(unwind-protect
+								(progn
+									;; url-http-response-status is NOT set in response-buf, simulating a
+									;; connection dropped before HTTP headers arrived
+									(should-not
+									 (condition-case err
+											 (progn
+												 (with-current-buffer response-buf
+													 (funcall captured-callback nil))
+												 nil)
+										 (error err)))
+									;; Mode should be disabled (nil http-status treated as failure)
+									(should-not languagetool-server-mode))
+							(when (buffer-live-p response-buf)
+								(kill-buffer response-buf)))))))))
+
 ;;; Tests for non-blocking mode initialization
 
 (ert-deftest languagetool-test-server-mode-on-is-non-blocking ()
