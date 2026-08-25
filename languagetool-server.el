@@ -624,7 +624,7 @@ BUFFER-MAX is used for bounds checking."
 REGION-START is the offset for correction positions."
 	(languagetool-core-clear-buffer)
 	(when languagetool-server-mode
-		(when-let ((corrections (alist-get 'matches json-parsed)))
+		(when-let* ((corrections (alist-get 'matches json-parsed)))
 			(let ((buffer-max (point-max)))
 				(dotimes (index (length corrections))
 					(languagetool-server--apply-correction
@@ -669,7 +669,7 @@ LAST-REQUEST is used to verify this is still the current request."
 									 checking-buffer
 									 (format "Server error (status: %s)" http-status))
 								;; Success - parse and apply corrections
-								(when-let ((json-parsed (languagetool-server--parse-response)))
+								(when-let* ((json-parsed (languagetool-server--parse-response)))
 									(with-current-buffer checking-buffer
 										(save-excursion
 											(languagetool-server--apply-corrections json-parsed region-start))

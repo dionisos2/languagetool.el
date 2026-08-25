@@ -226,7 +226,7 @@ Found no errors.")
 
 (defun languagetool-console-matches-exists-p ()
 	"Return t if issues where found by LanguageTool or nil otherwise."
-	(when-let ((matches (alist-get 'matches languagetool-console-output-parsed)))
+	(when-let* ((matches (alist-get 'matches languagetool-console-output-parsed)))
 		(/= 0 (length matches))))
 
 (defun languagetool-console-highlight-matches (begin)
@@ -234,7 +234,7 @@ Found no errors.")
 
 BEGIN defines the start of the current region."
 	;; Guard against nil corrections from malformed JSON
-	(when-let ((corrections (alist-get 'matches languagetool-console-output-parsed)))
+	(when-let* ((corrections (alist-get 'matches languagetool-console-output-parsed)))
 		(dotimes (index (length corrections))
 			(let* ((correction (aref corrections index))
 						 (offset (alist-get 'offset correction))
