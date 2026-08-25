@@ -474,7 +474,7 @@ BUFFER is the buffer to check, START and END define the region."
 				(setq rules (string-join (append languagetool-disabled-rules (languagetool-get-disabled-rules-for-current-buffer)) ","))
 				(unless (string= rules "")
 					(push (list "disabledRules" rules) arguments)))
-			(push (list "text" (url-hexify-string (buffer-substring-no-properties region-start region-end))) arguments))))
+			(push (list "text" (buffer-substring-no-properties region-start region-end)) arguments))))
 
 (defun languagetool-server-region-around-point (buffer)
 	"Return cons cell (start . end) for region around point in BUFFER, using line offsets."

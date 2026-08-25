@@ -104,7 +104,25 @@
 		(languagetool-disabled-rules nil))
 			(let ((alist (languagetool-server-parse-request (current-buffer) 1 10)))
 	(should (member '("language" "fr") alist))
-	(should (member '("text" "Ceci%20est%20") alist))))))
+	(should (member '("text" "Ceci est ") alist))))))
+
+(ert-deftest languagetool-server-request-text-encoded-once-test ()
+	"Test that the request body encodes the text exactly once.
+Regression test: `url-build-query-string' already percent-encodes every
+value, so hexifying the text beforehand sends literal \"%20\" sequences to
+the server, which then reports the whole region as a single typo."
+	(with-temp-buffer
+		(insert "Ceci est un test.")
+		(let* ((languagetool-correction-language "fr")
+		(languagetool-mother-tongue nil)
+		(languagetool-api-key nil)
+		(languagetool-username nil)
+		(languagetool-suggestion-level nil)
+		(languagetool-disabled-rules nil)
+		(query (url-build-query-string
+			(languagetool-server-parse-request (current-buffer) (point-min) (point-max))))
+		(fields (url-parse-query-string query)))
+			(should (string= (cadr (assoc "text" fields)) "Ceci est un test.")))))
 
 (defun languagetool-test-callback (_status orig-buffer region-start)
 	"Callback de test pour url-retrieve. Affiche la réponse JSON brute."
